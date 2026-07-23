@@ -8,6 +8,11 @@ players:
       book: manual
     fit:
       rating: 5
+      skills:
+        distance: 3
+        approach: 5
+        recovery: 3
+        greens: 5
       notes: >
         The cleanest fit in the field. Vale ranks near the top on approaches from
         inside 150 and putts well on bentgrass — the two skills this course pays.
@@ -23,6 +28,11 @@ players:
       book: manual
     fit:
       rating: 4
+      skills:
+        distance: 2
+        approach: 5
+        recovery: 2
+        greens: 4
       notes: >
         A wedge-first player whose length is average but whose short-iron
         proximity has been elite over his last dozen starts. Wayward off the tee
@@ -37,6 +47,11 @@ players:
       book: manual
     fit:
       rating: 4
+      skills:
+        distance: 4
+        approach: 4
+        recovery: 3
+        greens: 2
       notes: >
         The most interesting price on the board. Brandt's ball-striking fits a
         birdie course, but he has been let down by a cold putter — the miss that
@@ -52,6 +67,11 @@ players:
       book: manual
     fit:
       rating: 3
+      skills:
+        distance: 5
+        approach: 2
+        recovery: 2
+        greens: 3
       notes: >
         A bomber who gains most of his edge off the tee — exactly the edge this
         course neutralises. Fair price for the talent, but the profile argues
@@ -66,6 +86,11 @@ players:
       book: manual
     fit:
       rating: 4
+      skills:
+        distance: 2
+        approach: 4
+        recovery: 3
+        greens: 4
       notes: >
         Quietly one of the better wedge players in the field and a strong
         bentgrass putter. Lacks the tee-to-green ceiling of the favourites, but
@@ -81,6 +106,11 @@ players:
       book: manual
     fit:
       rating: 3
+      skills:
+        distance: 3
+        approach: 2
+        recovery: 3
+        greens: 3
       notes: >
         Defending champion, and the market is charging for the narrative. The win
         here was real, but his approach numbers have slipped since. Course history

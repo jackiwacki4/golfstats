@@ -2,6 +2,7 @@
 import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import DemandsPanel from '../../components/DemandsPanel.astro';
+import CourseMap from '../../components/CourseMap.astro';
 import { resolveEntries, formatDateRange } from '../../lib/data';
 
 export async function getStaticPaths() {
@@ -40,7 +41,7 @@ const profileParas = course.data.profile.trim().split(/\n\s*\n/);
 
 <Base title={`${course.data.name} — course profile`} description={`Course profile and event history for ${course.data.name}.`}>
   <article class="wrap course">
-    <header class="course__hero">
+    <header class="course__hero reveal">
       <p class="eyebrow">Course profile</p>
       <h1>{course.data.name}</h1>
       <p class="course__loc num">
@@ -53,13 +54,18 @@ const profileParas = course.data.profile.trim().split(/\n\s*\n/);
       </dl>
     </header>
 
-    <div class="course__profile prose">
-      {profileParas.map((para) => <p>{para}</p>)}
+    <div class="course__lede reveal">
+      <div class="course__profile prose">
+        {profileParas.map((para) => <p>{para}</p>)}
+      </div>
+      <div class="course__map">
+        <CourseMap demands={course.data.demands} />
+      </div>
     </div>
 
     <DemandsPanel demands={course.data.demands} />
 
-    <section class="course__history" aria-labelledby="history-title">
+    <section class="course__history reveal" aria-labelledby="history-title">
       <p class="eyebrow">Played here</p>
       <h2 id="history-title">How past events went</h2>
       <p class="course__history-note">
@@ -101,6 +107,22 @@ const profileParas = course.data.profile.trim().split(/\n\s*\n/);
   .course__hero h1 {
     font-size: var(--step-3);
     margin: 0.2rem 0 0.4rem;
+  }
+  .course__lede {
+    display: grid;
+    gap: 2rem;
+    align-items: start;
+  }
+  @media (min-width: 50rem) {
+    .course__lede {
+      grid-template-columns: 1fr 18rem;
+    }
+  }
+  .course__map {
+    background: var(--panel);
+    border: var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1rem 0.75rem;
   }
   .course__loc {
     font-size: var(--step--1);

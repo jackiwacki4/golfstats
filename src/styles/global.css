@@ -1,47 +1,63 @@
 /* ============================================================================
-   golfstats — design system
-   Concept: a yardage book, not a betting app. Warm paper, ink, one structural
-   green, boldness spent in exactly one place (the wind rose). Numbers are set in
-   tabular figures everywhere they appear.
+   golfstats — design system v2
+   Concept: modern golf performance — the energy of a product launch page, not
+   a spreadsheet. Bold condensed type, high contrast blocks, motion that earns
+   its keep, and graphics (course map, fit radar) doing the explaining instead
+   of prose alone. One accent carries emphasis; everything else stays out of
+   the way of the data.
    ========================================================================== */
 
-@import '@fontsource-variable/fraunces';
+@import '@fontsource-variable/archivo';
 @import '@fontsource-variable/public-sans';
 @import '@fontsource/ibm-plex-mono/400.css';
 @import '@fontsource/ibm-plex-mono/500.css';
 
 :root {
   /* ── Palette (6) ─────────────────────────────────────────────────────── */
-  --paper: #f3efe6; /* warm off-white ground — yardage-book stock */
-  --ink: #1c1b17; /* near-black text, never pure #000 */
-  --pine: #20402f; /* deep muted fairway green — STRUCTURE only, never a glow */
-  --clay: #a6421e; /* burnt sienna — the ONLY emphasis/market accent, used sparingly */
-  --steel: #3c5a6e; /* slate blue — reserved exclusively for wind/weather */
-  --sand: #c7b8a0; /* khaki — rules, borders, quiet dividers */
+  --ink: #14151a; /* near-black — dark bands, headline color on light */
+  --paper: #fafaf8; /* clean surface, not warm parchment */
+  --panel: #f0efe9; /* recessed panel fill */
+  --turf: #0f7a4d; /* deep vivid green — structural accent, CTAs */
+  --signal: #e2472b; /* the ONE bold emphasis accent — used sparingly */
+  --steel: #3b6e91; /* wind / weather only */
+  --mist: #dedad0; /* borders, quiet dividers */
 
-  /* Derived, kept in-family */
-  --paper-2: #ece7db; /* recessed panel fill */
-  --ink-60: #5b584e; /* secondary text */
-  --sand-30: rgba(199, 184, 160, 0.35);
-  --pine-tint: rgba(32, 64, 47, 0.08);
-  --clay-tint: rgba(166, 66, 30, 0.1);
+  --ink-70: #3a3b41;
+  --ink-55: #6b6c73;
+  --mist-40: rgba(222, 218, 208, 0.5);
+  --turf-tint: rgba(15, 122, 77, 0.09);
+  --signal-tint: rgba(226, 71, 43, 0.1);
+  --ink-tint: rgba(20, 21, 26, 0.05);
+
+  /* Legacy v1 aliases — kept so components written against the old "yardage
+     book" palette repaint correctly under the new one without a full rewrite. */
+  --pine: var(--turf);
+  --clay: var(--signal);
+  --sand: var(--mist);
+  --sand-30: var(--mist-40);
+  --ink-60: var(--ink-55);
+  --paper-2: var(--panel);
+  --clay-tint: var(--signal-tint);
+  --pine-tint: var(--turf-tint);
 
   /* ── Type ────────────────────────────────────────────────────────────── */
-  --font-display: 'Fraunces Variable', Georgia, serif; /* tournament-signage serif */
-  --font-body: 'Public Sans Variable', system-ui, sans-serif; /* legible humanist */
-  --font-data: 'IBM Plex Mono', ui-monospace, monospace; /* tabular figures */
+  --font-display: 'Archivo Variable', 'Archivo', system-ui, sans-serif;
+  --font-body: 'Public Sans Variable', system-ui, sans-serif;
+  --font-data: 'IBM Plex Mono', ui-monospace, monospace;
 
-  /* Modular scale (1.25) */
+  /* Modular scale (1.28), slightly steeper for more headline punch */
   --step--1: clamp(0.83rem, 0.8rem + 0.15vw, 0.9rem);
   --step-0: clamp(1rem, 0.96rem + 0.2vw, 1.1rem);
-  --step-1: clamp(1.25rem, 1.18rem + 0.35vw, 1.44rem);
-  --step-2: clamp(1.56rem, 1.44rem + 0.6vw, 1.94rem);
-  --step-3: clamp(1.95rem, 1.76rem + 0.95vw, 2.6rem);
-  --step-4: clamp(2.44rem, 2.13rem + 1.55vw, 3.5rem);
+  --step-1: clamp(1.28rem, 1.2rem + 0.4vw, 1.5rem);
+  --step-2: clamp(1.64rem, 1.5rem + 0.7vw, 2rem);
+  --step-3: clamp(2.1rem, 1.85rem + 1.25vw, 2.85rem);
+  --step-4: clamp(2.7rem, 2.25rem + 2.25vw, 4.2rem);
 
   --measure: 66ch;
-  --radius: 3px;
-  --border: 1px solid var(--sand);
+  --radius: 6px;
+  --radius-lg: 14px;
+  --border: 1px solid var(--mist);
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ── Reset-ish base ─────────────────────────────────────────────────────── */
@@ -73,9 +89,10 @@ h2,
 h3,
 h4 {
   font-family: var(--font-display);
-  font-weight: 550;
-  line-height: 1.08;
-  letter-spacing: -0.01em;
+  font-weight: 800;
+  font-stretch: 95%;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
   margin: 0 0 0.5em;
   text-wrap: balance;
 }
@@ -95,12 +112,13 @@ p {
 }
 
 a {
-  color: var(--pine);
+  color: var(--turf);
   text-underline-offset: 0.15em;
   text-decoration-thickness: 1px;
+  transition: color 0.15s var(--ease);
 }
 a:hover {
-  color: var(--clay);
+  color: var(--signal);
 }
 
 /* Numbers: tabular figures, always. */
@@ -114,7 +132,7 @@ time,
 
 /* ── Accessibility: visible focus, reduced motion ───────────────────────── */
 :focus-visible {
-  outline: 3px solid var(--clay);
+  outline: 3px solid var(--signal);
   outline-offset: 2px;
   border-radius: 2px;
 }
@@ -144,6 +162,25 @@ time,
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ── Motion: scroll-reveal ───────────────────────────────────────────────
+   .reveal is fully visible by default (safe with no JS). A blocking script in
+   Base.astro's <head> adds "js" to <html> before paint; only then do reveal
+   elements start hidden, to be faded/risen in by the IntersectionObserver in
+   Base.astro's footer script. */
+.js .reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.6s var(--ease), transform 0.6s var(--ease);
+}
+.js .reveal.is-visible {
+  opacity: 1;
+  transform: none;
 }
 
 /* ── Layout primitives ──────────────────────────────────────────────────── */
@@ -159,40 +196,29 @@ time,
   margin-top: 1.6em;
 }
 
-/* A "plate": a data block set apart from the narrative, like a page torn from
-   the yardage book. */
+/* A "plate": a data block set apart from the narrative. */
 .plate {
-  background: var(--paper-2);
+  background: var(--paper);
   border: var(--border);
-  border-radius: var(--radius);
-  padding: clamp(1rem, 3vw, 1.6rem);
+  border-radius: var(--radius-lg);
+  padding: clamp(1rem, 3vw, 1.75rem);
+  transition: box-shadow 0.25s var(--ease), transform 0.25s var(--ease), border-color 0.25s var(--ease);
+}
+@media (hover: hover) {
+  .plate:hover {
+    border-color: var(--ink-tint);
+    box-shadow: 0 20px 40px -28px rgba(20, 21, 26, 0.35);
+    transform: translateY(-3px);
+  }
 }
 
 .eyebrow {
   font-family: var(--font-data);
   font-size: var(--step--1);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-60);
+  color: var(--ink-55);
   margin: 0 0 0.4rem;
-}
-
-/* Small stat lozenge */
-.stat {
-  font-family: var(--font-data);
-  font-variant-numeric: tabular-nums;
-}
-.stat b {
-  display: block;
-  font-weight: 500;
-  font-size: var(--step-1);
-  color: var(--ink);
-}
-.stat span {
-  font-size: var(--step--1);
-  color: var(--ink-60);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 
 hr {
@@ -211,4 +237,43 @@ hr {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-data);
+  font-size: var(--step--1);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.8rem 1.35rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-decoration: none;
+  border: 1px solid var(--ink);
+  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), background 0.2s var(--ease);
+}
+.btn--solid {
+  background: var(--ink);
+  color: var(--paper);
+}
+.btn--solid:hover {
+  background: var(--turf);
+  border-color: var(--turf);
+  color: var(--paper);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -12px rgba(15, 122, 77, 0.55);
+}
+.btn--ghost {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--mist);
+}
+.btn--ghost:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  transform: translateY(-2px);
 }

@@ -2,11 +2,14 @@
 import { getCollection, render } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import DemandsPanel from '../../components/DemandsPanel.astro';
+import CourseMap from '../../components/CourseMap.astro';
+import FitRadar from '../../components/FitRadar.astro';
 import FitTable from '../../components/FitTable.astro';
 import WeatherPanel from '../../components/WeatherPanel.astro';
 import MarketNotes from '../../components/MarketNotes.astro';
 import { getEventBundle, formatDateRange } from '../../lib/data';
 import { getTournamentWeather } from '../../lib/weather';
+import { courseAxes } from '../../lib/radar';
 
 export async function getStaticPaths() {
   const previews = await getCollection('previews');
@@ -24,27 +27,65 @@ const weather = course
   ? await getTournamentWeather(course.data.coords, event.data.startDate, event.data.endDate)
   : null;
 const dateRange = formatDateRange(event.data.startDate, event.data.endDate);
+const cAxes = course ? courseAxes(course.data.demands) : null;
 ---
 
 <Base title={`${event.data.name} ${event.data.year} preview`} description={preview.data.dek}>
   <article>
-    <header class="p-hero wrap">
-      <p class="eyebrow"><a href="/">This week</a> · Preview</p>
-      <h1 class="p-hero__title">{event.data.name}</h1>
-      <p class="p-hero__dek">{preview.data.dek}</p>
-      <p class="p-hero__meta num">
-        {course?.data.name} · {course?.data.location.city}, {course?.data.location.state}
-        <span class="p-hero__dot">·</span> {dateRange}
-      </p>
+    <header class="p-hero">
+      <div class="wrap p-hero__inner">
+        <p class="eyebrow"><a href="/">← This week</a> · Preview</p>
+        <h1 class="p-hero__title">{event.data.name}</h1>
+        <p class="p-hero__dek">{preview.data.dek}</p>
+        <p class="p-hero__meta num">
+          {course?.data.name} · {course?.data.location.city}, {course?.data.location.state}
+          <span class="p-hero__dot">·</span> {dateRange}
+        </p>
+      </div>
     </header>
 
     <div class="wrap p-layout">
       <div class="p-main">
-        <div class="prose">
+        <div class="prose reveal">
           <Content />
         </div>
 
+        {course && (
+          <section class="p-map reveal" aria-labelledby="map-title">
+            <div class="p-map__graphic">
+              <CourseMap demands={course.data.demands} wind={weather?.days[0] ?? null} />
+            </div>
+            <div class="p-map__copy">
+              <p class="eyebrow">The corridor, at a glance</p>
+              <h2 id="map-title">Where this week gets decided</h2>
+              <p>
+                The <strong>signal-red</strong> band is the yardage that separates the
+                field — where proximity matters most. Green bands are the rest of the
+                approach mix. The fairway narrows toward the pin as rough severity
+                rises, and the arrow (if shown) marks the week's prevailing wind.
+              </p>
+            </div>
+          </section>
+        )}
+
         {course && <DemandsPanel demands={course.data.demands} />}
+
+        {cAxes && lines.length > 0 && (
+          <section class="p-radar reveal" aria-labelledby="radar-title">
+            <p class="eyebrow">Fit, visualized</p>
+            <h2 id="radar-title">Course shape vs. player shape</h2>
+            <p class="p-radar__lede">
+              The dashed outline is the course's own demand shape. The filled shape is
+              each player's skill profile on the same four axes — distance, approach,
+              recovery, greens. The closer the fill hugs the outline, the cleaner the fit.
+            </p>
+            <div class="p-radar__grid">
+              {lines.map((l) => (
+                <FitRadar course={cAxes} player={l.fit.skills} name={l.name} rating={l.fit.rating} />
+              ))}
+            </div>
+          </section>
+        )}
 
         <FitTable lines={lines} />
 
@@ -68,38 +109,46 @@ const dateRange = formatDateRange(event.data.startDate, event.data.endDate);
 
 <style>
   .p-hero {
-    padding: clamp(1.75rem, 6vw, 3.5rem) 0 1.5rem;
-    border-bottom: 2px solid var(--pine);
+    background: var(--ink);
+    color: var(--paper);
+    padding: clamp(2.5rem, 8vw, 4.5rem) 0 clamp(2rem, 6vw, 3rem);
   }
-  .p-hero .eyebrow a {
+  .p-hero__inner .eyebrow {
+    color: var(--mist);
+  }
+  .p-hero__inner .eyebrow a {
     color: inherit;
+    text-decoration: none;
+  }
+  .p-hero__inner .eyebrow a:hover {
+    color: var(--signal);
   }
   .p-hero__title {
     font-size: var(--step-4);
     margin: 0.2rem 0 0.4rem;
+    color: var(--paper);
   }
   .p-hero__dek {
-    font-family: var(--font-display);
-    font-weight: 400;
+    font-weight: 500;
     font-size: var(--step-1);
-    color: var(--ink-60);
+    color: #c9c9c2;
     max-width: 46ch;
-    margin: 0 0 0.75rem;
+    margin: 0 0 0.9rem;
   }
   .p-hero__meta {
     font-size: var(--step--1);
-    color: var(--ink-60);
+    color: #9a9a92;
     margin: 0;
   }
   .p-hero__dot {
     margin: 0 0.4rem;
-    color: var(--sand);
+    opacity: 0.6;
   }
 
   .p-layout {
     display: grid;
     gap: 2.5rem;
-    padding-top: 2.5rem;
+    padding-top: 2.75rem;
     align-items: start;
   }
   @media (min-width: 60rem) {
@@ -113,7 +162,7 @@ const dateRange = formatDateRange(event.data.startDate, event.data.endDate);
   }
   .p-main {
     display: grid;
-    gap: 2.25rem;
+    gap: 2.5rem;
     min-width: 0;
   }
   .p-main :global(.prose h2) {
@@ -123,5 +172,49 @@ const dateRange = formatDateRange(event.data.startDate, event.data.endDate);
     font-family: var(--font-data);
     font-size: var(--step--1);
     margin: 0;
+  }
+
+  .p-map {
+    display: grid;
+    gap: 1.5rem;
+    align-items: center;
+    padding: clamp(1.25rem, 3vw, 2rem);
+    background: var(--panel);
+    border-radius: var(--radius-lg);
+    border: var(--border);
+  }
+  @media (min-width: 40rem) {
+    .p-map {
+      grid-template-columns: minmax(14rem, 20rem) 1fr;
+    }
+  }
+  .p-map__copy p {
+    color: var(--ink-55);
+    margin: 0;
+  }
+  .p-map__copy strong {
+    color: var(--signal);
+    font-weight: 700;
+  }
+
+  .p-radar__lede {
+    color: var(--ink-55);
+    max-width: 62ch;
+  }
+  .p-radar__grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem 0.5rem;
+    margin-top: 1.25rem;
+  }
+  @media (min-width: 36rem) {
+    .p-radar__grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+  @media (min-width: 60rem) {
+    .p-radar__grid {
+      grid-template-columns: repeat(6, 1fr);
+    }
   }
 </style>

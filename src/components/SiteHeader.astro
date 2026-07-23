@@ -39,7 +39,7 @@ const isHome = path === '/' || path === '';
   .site-header__mark {
     font-family: var(--font-display);
     font-size: var(--step-2);
-    font-weight: 600;
+    font-weight: 800;
     letter-spacing: -0.02em;
   }
   .site-header__sub {
@@ -62,6 +62,7 @@ const isHome = path === '/' || path === '';
     text-decoration: none;
     padding-bottom: 2px;
     border-bottom: 2px solid transparent;
+    transition: color 0.2s var(--ease), border-color 0.2s var(--ease);
   }
   .site-header__nav a:hover,
   .site-header__nav a[aria-current='page'] {

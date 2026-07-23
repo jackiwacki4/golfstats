@@ -1,0 +1,238 @@
+---
+// SIGNATURE GRAPHIC. A schematic tee-to-green corridor, generated entirely from
+// the course's structured demands (+ optionally the week's dominant wind) — not
+// a literal routing (we don't have real hole geometry), but an honest visual
+// translation of the same numbers the demands panel shows as bars. This is the
+// "why these players fit" anchor: the approach hot-zone bands are the same data
+// driving the fit reasoning, just drawn instead of tabulated.
+interface Bucket {
+  range: string;
+  weight: number;
+}
+interface Demands {
+  drivingDistance: number;
+  approachBuckets: Bucket[];
+  roughSeverity: number;
+  greenSize: 'small' | 'medium' | 'large';
+  greenComplexity: number;
+  windExposure: number;
+}
+interface Wind {
+  dominant: string | null; // compass letters, e.g. "SW"
+  avgSpeed: number;
+}
+const { demands, wind } = Astro.props as { demands: Demands; wind?: Wind | null };
+
+const W = 320;
+const TEE_Y = 430;
+const GREEN_Y = 70;
+const TEE_HALF_WIDTH = 82;
+const GREEN_HALF_WIDTH = 46 - demands.roughSeverity * 3; // tighter corridor when rough bites harder
+const CX = W / 2;
+
+// Fairway corridor as a simple tapered polygon (schematic, not a literal hole).
+const corridor = `
+  M ${CX - TEE_HALF_WIDTH} ${TEE_Y}
+  L ${CX - GREEN_HALF_WIDTH} ${GREEN_Y}
+  L ${CX + GREEN_HALF_WIDTH} ${GREEN_Y}
+  L ${CX + TEE_HALF_WIDTH} ${TEE_Y}
+  Z
+`;
+
+// Parse "100-125" style ranges into a midpoint yardage, so bands can be placed
+// nearest-to-green (small yardages) through farthest-from-green (large ones).
+function midpoint(range: string): number {
+  const nums = range.match(/\d+/g)?.map(Number) ?? [0];
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+const parsed = demands.approachBuckets.map((b) => ({ ...b, mid: midpoint(b.range) }));
+const minMid = Math.min(...parsed.map((b) => b.mid));
+const maxMid = Math.max(...parsed.map((b) => b.mid));
+const span = Math.max(1, maxMid - minMid);
+const topWeight = Math.max(...parsed.map((b) => b.weight));
+
+const bands = parsed.map((b) => {
+  const frac = (b.mid - minMid) / span; // 0 = nearest green, 1 = farthest
+  const y = GREEN_Y + 40 + frac * (TEE_Y - GREEN_Y - 90);
+  const thickness = 8 + b.weight * 5;
+  // corridor half-width at this y, by linear interpolation tee->green
+  const corridorFrac = (y - GREEN_Y) / (TEE_Y - GREEN_Y);
+  const halfW = GREEN_HALF_WIDTH + corridorFrac * (TEE_HALF_WIDTH - GREEN_HALF_WIDTH);
+  return {
+    y,
+    x1: CX - halfW + 6,
+    x2: CX + halfW - 6,
+    thickness,
+    isDecisive: b.weight === topWeight,
+    range: b.range,
+    weight: b.weight,
+  };
+});
+
+const greenR = { small: 30, medium: 40, large: 50 }[demands.greenSize];
+const contourRings = Array.from({ length: demands.greenComplexity }, (_, i) => greenR - 8 - i * 7).filter((r) => r > 8);
+
+const WIND_BEARING: Record<string, number> = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
+const bearing = wind?.dominant ? WIND_BEARING[wind.dominant] : null;
+const windArrowLen = wind ? Math.min(46, 14 + wind.avgSpeed * 2.2) : 0;
+---
+
+<figure class="course-map reveal">
+  <svg viewBox={`0 0 ${W} 480`} role="img" aria-label="Schematic course corridor showing approach hot-zones and rough severity">
+    <!-- rough fringe -->
+    <polygon
+      points={`${CX - TEE_HALF_WIDTH - 14},${TEE_Y} ${CX - GREEN_HALF_WIDTH - 10},${GREEN_Y - 8} ${CX + GREEN_HALF_WIDTH + 10},${GREEN_Y - 8} ${CX + TEE_HALF_WIDTH + 14},${TEE_Y}`}
+      class="cm-rough"
+    />
+    <!-- fairway corridor -->
+    <path d={corridor} class="cm-fairway" />
+
+    <!-- approach hot-zone bands -->
+    {
+      bands.map((b) => (
+        <line
+          x1={b.x1}
+          y1={b.y}
+          x2={b.x2}
+          y2={b.y}
+          stroke-width={b.thickness}
+          class:list={['cm-band', { 'cm-band--decisive': b.isDecisive }]}
+        >
+          <title>{b.range} yds · weight {b.weight}/5{b.isDecisive ? ' · the yardage that decides the week' : ''}</title>
+        </line>
+      ))
+    }
+
+    <!-- green + contours -->
+    <ellipse cx={CX} cy={GREEN_Y} rx={greenR} ry={greenR * 0.62} class="cm-green" />
+    {contourRings.map((r) => <ellipse cx={CX} cy={GREEN_Y} rx={r} ry={r * 0.62} class="cm-contour" />)}
+    <circle cx={CX} cy={GREEN_Y} r="3.5" class="cm-pin" />
+
+    <!-- aim line -->
+    <line x1={CX} y1={TEE_Y - 4} x2={CX} y2={GREEN_Y + 6} class="cm-aim" />
+
+    <!-- tee marker -->
+    <circle cx={CX} cy={TEE_Y} r="5" class="cm-tee" />
+    <text x={CX} y={TEE_Y + 22} class="cm-orient" text-anchor="middle">TEE</text>
+    <text x={CX} y={GREEN_Y - 44} class="cm-orient" text-anchor="middle">GREEN</text>
+
+    {
+      wind && bearing !== null && (
+        <g transform={`translate(${CX + TEE_HALF_WIDTH + 34} ${GREEN_Y + 90}) rotate(${bearing + 180})`} class="cm-wind">
+          <line x1="0" y1={windArrowLen / 2} x2="0" y2={-windArrowLen / 2} />
+          <path d={`M -6 ${-windArrowLen / 2 + 8} L 0 ${-windArrowLen / 2} L 6 ${-windArrowLen / 2 + 8}`} />
+        </g>
+      )
+    }
+  </svg>
+
+  <figcaption class="cm-legend">
+    <span><i class="cm-swatch cm-swatch--decisive" /> Decisive approach yardage</span>
+    <span><i class="cm-swatch cm-swatch--band" /> Approach hot-zone</span>
+    <span><i class="cm-swatch cm-swatch--rough" /> Rough</span>
+    {wind && bearing !== null && <span><i class="cm-swatch cm-swatch--wind" /> Prevailing wind</span>}
+  </figcaption>
+</figure>
+
+<style>
+  .course-map {
+    margin: 0;
+    max-width: 22rem;
+    margin-inline: auto;
+  }
+  svg {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  .cm-rough {
+    fill: var(--panel);
+    stroke: var(--mist);
+    stroke-width: 1;
+  }
+  .cm-fairway {
+    fill: var(--turf-tint);
+    stroke: var(--turf);
+    stroke-width: 1.5;
+  }
+  .cm-band {
+    stroke: var(--turf);
+    opacity: 0.28;
+    stroke-linecap: round;
+  }
+  .cm-band--decisive {
+    stroke: var(--signal);
+    opacity: 0.55;
+  }
+  .cm-green {
+    fill: var(--panel);
+    stroke: var(--ink);
+    stroke-width: 1.5;
+  }
+  .cm-contour {
+    fill: none;
+    stroke: var(--mist);
+    stroke-width: 1;
+  }
+  .cm-pin {
+    fill: var(--signal);
+  }
+  .cm-tee {
+    fill: var(--ink);
+  }
+  .cm-aim {
+    stroke: var(--mist);
+    stroke-width: 1;
+    stroke-dasharray: 3 4;
+  }
+  .cm-orient {
+    font-family: var(--font-data);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    fill: var(--ink-55);
+  }
+  .cm-wind line,
+  .cm-wind path {
+    stroke: var(--steel);
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .cm-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    justify-content: center;
+    margin-top: 0.75rem;
+    font-size: 0.72rem;
+    font-family: var(--font-data);
+    letter-spacing: 0.03em;
+    color: var(--ink-55);
+  }
+  .cm-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .cm-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+  .cm-swatch--decisive {
+    background: var(--signal);
+  }
+  .cm-swatch--band {
+    background: var(--turf);
+    opacity: 0.5;
+  }
+  .cm-swatch--rough {
+    background: var(--panel);
+    border: 1px solid var(--mist);
+  }
+  .cm-swatch--wind {
+    background: var(--steel);
+  }
+</style>

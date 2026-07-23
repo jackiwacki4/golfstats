@@ -12,7 +12,11 @@ export interface ResolvedLine {
   name: string;
   country: string;
   odds: Odds;
-  fit: { rating: number; notes: string };
+  fit: {
+    rating: number;
+    notes: string;
+    skills: { distance: number; approach: number; recovery: number; greens: number };
+  };
   result: {
     finish: number | null;
     madeCut: boolean | null;

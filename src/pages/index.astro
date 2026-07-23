@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import CourseMap from '../components/CourseMap.astro';
 import { getCurrentPreview, getEventBundle, formatDateRange } from '../lib/data';
 import { getTournamentWeather } from '../lib/weather';
 
@@ -22,31 +23,43 @@ const purse = event.data.purse
 ---
 
 <Base title="golfstats" description={preview.data.dek}>
-  <section class="hero wrap">
-    <p class="hero__eyebrow eyebrow">This week on the PGA Tour · published {new Date(preview.data.publishDate + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}</p>
-    <h1 class="hero__title">{event.data.name}</h1>
-    <p class="hero__dek">{preview.data.dek}</p>
-
-    <dl class="hero__facts">
-      <div><dt>Course</dt><dd>{course?.data.name}</dd></div>
-      <div><dt>Where</dt><dd>{course?.data.location.city}, {course?.data.location.state}</dd></div>
-      <div><dt>Dates</dt><dd class="num">{dateRange}</dd></div>
-      {course && <div><dt>Par / Yards</dt><dd class="num">{course.data.par} · {course.data.yardage.toLocaleString()}</dd></div>}
-      {purse && <div><dt>Purse</dt><dd class="num">{purse}</dd></div>}
-    </dl>
-
-    <div class="hero__cta">
-      <a href={`/preview/${preview.id}`} class="hero__btn">Read the five-minute preview →</a>
-      {firstRose && (
-        <p class="hero__wind num">
-          Opening-day wind: <strong>{firstRose.avgSpeed} mph</strong>
-          {firstRose.dominant && <> from the {firstRose.dominant}</>}
+  <section class="hero">
+    <div class="wrap hero__inner">
+      <div class="hero__copy">
+        <p class="hero__eyebrow eyebrow">
+          This week on the PGA Tour · published {new Date(preview.data.publishDate + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
         </p>
+        <h1 class="hero__title">{event.data.name}</h1>
+        <p class="hero__dek">{preview.data.dek}</p>
+
+        <dl class="hero__facts">
+          <div><dt>Course</dt><dd>{course?.data.name}</dd></div>
+          <div><dt>Where</dt><dd>{course?.data.location.city}, {course?.data.location.state}</dd></div>
+          <div><dt>Dates</dt><dd class="num">{dateRange}</dd></div>
+          {course && <div><dt>Par / Yards</dt><dd class="num">{course.data.par} · {course.data.yardage.toLocaleString()}</dd></div>}
+          {purse && <div><dt>Purse</dt><dd class="num">{purse}</dd></div>}
+        </dl>
+
+        <div class="hero__cta">
+          <a href={`/preview/${preview.id}`} class="btn btn--solid btn--lg">Read the five-minute preview →</a>
+          {firstRose && (
+            <p class="hero__wind num">
+              Opening-day wind <strong>{firstRose.avgSpeed} mph</strong>
+              {firstRose.dominant && <> from the {firstRose.dominant}</>}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {course && (
+        <div class="hero__graphic reveal">
+          <CourseMap demands={course.data.demands} wind={firstRose} />
+        </div>
       )}
     </div>
   </section>
 
-  <section class="wrap teaser">
+  <section class="wrap teaser reveal">
     <div class="teaser__col">
       <p class="eyebrow">The read in one line</p>
       <p class="teaser__line">
@@ -74,21 +87,33 @@ const purse = event.data.purse
 
 <style>
   .hero {
-    padding: clamp(2rem, 7vw, 4.5rem) 0 2rem;
+    background: var(--ink);
+    color: var(--paper);
+    padding: clamp(2.5rem, 8vw, 5rem) 0;
+  }
+  .hero__inner {
+    display: grid;
+    gap: 2.5rem;
+    align-items: center;
+  }
+  @media (min-width: 56rem) {
+    .hero__inner {
+      grid-template-columns: 1.3fr 0.9fr;
+    }
   }
   .hero__eyebrow {
-    color: var(--clay);
+    color: var(--signal);
   }
   .hero__title {
     font-size: var(--step-4);
     margin: 0.2rem 0 0.5rem;
+    color: var(--paper);
   }
   .hero__dek {
     font-size: var(--step-1);
-    max-width: 40ch;
-    color: var(--ink-60);
-    font-family: var(--font-display);
-    font-weight: 400;
+    max-width: 42ch;
+    color: #c9c9c2;
+    font-weight: 500;
   }
   .hero__facts {
     display: grid;
@@ -96,8 +121,8 @@ const purse = event.data.purse
     gap: 1rem 1.5rem;
     margin: 2rem 0;
     padding: 1.25rem 0;
-    border-top: 2px solid var(--pine);
-    border-bottom: var(--border);
+    border-top: 2px solid var(--turf);
+    border-bottom: 1px solid #2b2c33;
   }
   .hero__facts div {
     margin: 0;
@@ -107,13 +132,14 @@ const purse = event.data.purse
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--ink-60);
+    color: #8d8e95;
     margin-bottom: 0.2rem;
   }
   .hero__facts dd {
     margin: 0;
-    font-weight: 600;
+    font-weight: 700;
     font-size: var(--step-0);
+    color: var(--paper);
   }
   .hero__cta {
     display: flex;
@@ -121,31 +147,40 @@ const purse = event.data.purse
     gap: 1.5rem;
     flex-wrap: wrap;
   }
-  .hero__btn {
-    display: inline-block;
-    background: var(--pine);
-    color: var(--paper);
-    font-family: var(--font-data);
-    font-size: var(--step--1);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    text-decoration: none;
-    padding: 0.85rem 1.4rem;
-    border-radius: var(--radius);
+  .btn--lg {
+    padding: 1rem 1.6rem;
+    font-size: var(--step-0);
   }
-  .hero__btn:hover {
-    background: var(--ink);
+  /* .btn--solid is ink-on-paper by default, which disappears against this hero's
+     own ink background — invert to a turf fill so it actually reads as a button. */
+  .hero .btn--solid {
+    background: var(--turf);
+    border-color: var(--turf);
     color: var(--paper);
+  }
+  .hero .btn--solid:hover {
+    background: var(--signal);
+    border-color: var(--signal);
+    box-shadow: 0 10px 24px -12px rgba(226, 71, 43, 0.55);
   }
   .hero__wind {
     margin: 0;
     font-size: var(--step--1);
-    color: var(--steel);
+    color: #8bb4cc;
   }
+  .hero__wind strong {
+    color: #cfe4ee;
+  }
+  .hero__graphic {
+    background: var(--paper);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1rem 0.75rem;
+  }
+
   .teaser {
     display: grid;
     gap: 2rem;
-    padding: 1rem 0 2rem;
+    padding: clamp(2rem, 6vw, 3.5rem) 0 2rem;
   }
   @media (min-width: 44rem) {
     .teaser {
@@ -155,8 +190,9 @@ const purse = event.data.purse
   }
   .teaser__line {
     font-family: var(--font-display);
+    font-weight: 700;
     font-size: var(--step-2);
-    line-height: 1.25;
+    line-height: 1.2;
     margin: 0.3rem 0 0;
   }
   .teaser__notes {
@@ -167,7 +203,7 @@ const purse = event.data.purse
     gap: 0.6rem;
   }
   .teaser__notes li {
-    border-left: 3px solid var(--clay);
+    border-left: 3px solid var(--signal);
     padding-left: 0.8rem;
   }
   .teaser__note-label {
@@ -176,7 +212,7 @@ const purse = event.data.purse
   }
   .sample-flag {
     font-size: var(--step--1);
-    color: var(--ink-60);
+    color: var(--ink-55);
     font-style: italic;
     padding-bottom: 1rem;
   }

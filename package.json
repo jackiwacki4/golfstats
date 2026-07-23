@@ -11,7 +11,7 @@
     "check": "astro check"
   },
   "dependencies": {
-    "@fontsource-variable/fraunces": "^5.2.5",
+    "@fontsource-variable/archivo": "^5.2.5",
     "@fontsource-variable/public-sans": "^5.2.5",
     "@fontsource/ibm-plex-mono": "^5.2.5",
     "astro": "^5.13.0"

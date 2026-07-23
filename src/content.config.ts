@@ -104,6 +104,14 @@ const entries = defineCollection({
         fit: z.object({
           rating: z.number().min(1).max(5),
           notes: z.string(),
+          // Same 4 axes as a course's demands, so a player's shape can be
+          // plotted directly against the course's shape on one radar chart.
+          skills: z.object({
+            distance: z.number().min(1).max(5),
+            approach: z.number().min(1).max(5),
+            recovery: z.number().min(1).max(5), // scrambling / rough-and-trouble play
+            greens: z.number().min(1).max(5), // putting + proximity control
+          }),
         }),
         result, // filled in after the event — being publicly wrong on record is the point
       })
