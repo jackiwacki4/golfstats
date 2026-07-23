@@ -1,0 +1,71 @@
+---
+const path = Astro.url.pathname;
+const isHome = path === '/' || path === '';
+---
+
+<header class="site-header">
+  <div class="wrap site-header__row">
+    <a href="/" class="site-header__brand" aria-current={isHome ? 'page' : undefined}>
+      <span class="site-header__mark">golfstats</span>
+      <span class="site-header__sub">tournament previews</span>
+    </a>
+    <nav aria-label="Primary" class="site-header__nav">
+      <a href="/" aria-current={isHome ? 'page' : undefined}>This week</a>
+      <a href="/archive" aria-current={path.startsWith('/archive') ? 'page' : undefined}>Archive</a>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    border-bottom: var(--border);
+    background: var(--paper);
+  }
+  .site-header__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 0;
+    flex-wrap: wrap;
+  }
+  .site-header__brand {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    text-decoration: none;
+    color: var(--ink);
+  }
+  .site-header__mark {
+    font-family: var(--font-display);
+    font-size: var(--step-2);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .site-header__sub {
+    font-family: var(--font-data);
+    font-size: var(--step--1);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-60);
+  }
+  .site-header__nav {
+    display: flex;
+    gap: 1.25rem;
+    font-family: var(--font-data);
+    font-size: var(--step--1);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .site-header__nav a {
+    color: var(--ink-60);
+    text-decoration: none;
+    padding-bottom: 2px;
+    border-bottom: 2px solid transparent;
+  }
+  .site-header__nav a:hover,
+  .site-header__nav a[aria-current='page'] {
+    color: var(--ink);
+    border-bottom-color: var(--clay);
+  }
+</style>

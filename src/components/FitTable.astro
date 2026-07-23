@@ -1,0 +1,154 @@
+---
+import { formatAmerican, impliedPercent, type Odds } from '../lib/odds';
+
+interface Result {
+  finish: number | null;
+  madeCut: boolean | null;
+  status: 'pending' | 'cut' | 'finished' | 'wd';
+}
+interface Line {
+  name: string;
+  country: string;
+  odds: Odds;
+  fit: { rating: number; notes: string };
+  result: Result;
+}
+const { lines } = Astro.props as { lines: Line[] };
+
+const anyResult = lines.some((l) => l.result.status !== 'pending');
+
+function finishLabel(r: Result): string {
+  if (r.status === 'pending') return '—';
+  if (r.status === 'wd') return 'WD';
+  if (r.status === 'cut' || r.madeCut === false) return 'MC';
+  return r.finish ? `T${r.finish}`.replace('T1$', '1') : '—';
+}
+---
+
+<section class="plate" aria-labelledby="fit-title">
+  <p class="eyebrow">Player fits</p>
+  <h2 id="fit-title">Who the profile helps, who it quietly hurts</h2>
+  <p class="fit-intro">
+    Fit is how a player's skills line up with what <em>this</em> course pays for —
+    not a prediction, not a pick. A talented name with a low fit is usually the
+    interesting case: the market is charging for an edge the course neutralises.
+  </p>
+
+  <div class="fit-scroll">
+    <table class="fit-table">
+      <thead>
+        <tr>
+          <th scope="col">Player</th>
+          <th scope="col" class="ta-c">Fit</th>
+          <th scope="col" class="ta-r">Odds</th>
+          <th scope="col" class="ta-r">Implied</th>
+          {anyResult && <th scope="col" class="ta-r">Finish</th>}
+          <th scope="col" class="fit-table__notes">The read</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          lines.map((l) => (
+            <tr>
+              <th scope="row" class="fit-table__player">
+                {l.name}
+                <span class="fit-table__country">{l.country}</span>
+              </th>
+              <td class="ta-c">
+                <span class="dots" aria-label={`Fit ${l.fit.rating} of 5`}>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <i class:list={['dot', { 'dot--on': n <= l.fit.rating }]} aria-hidden="true" />
+                  ))}
+                </span>
+              </td>
+              <td class="ta-r odds">{formatAmerican(l.odds)}</td>
+              <td class="ta-r num implied">{impliedPercent(l.odds)}</td>
+              {anyResult && <td class="ta-r num">{finishLabel(l.result)}</td>}
+              <td class="fit-table__notes">{l.fit.notes}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<style>
+  .fit-intro {
+    color: var(--ink-60);
+    max-width: 62ch;
+  }
+  .fit-scroll {
+    overflow-x: auto;
+    margin-inline: -0.25rem;
+  }
+  .fit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--step--1);
+    min-width: 44rem;
+  }
+  .fit-table th,
+  .fit-table td {
+    padding: 0.7rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: var(--border);
+  }
+  .fit-table thead th {
+    font-family: var(--font-data);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-60);
+    font-size: 0.72rem;
+    border-bottom: 2px solid var(--sand);
+  }
+  .ta-c {
+    text-align: center !important;
+  }
+  .ta-r {
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
+  }
+  .fit-table__player {
+    font-family: var(--font-body);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .fit-table__country {
+    display: block;
+    font-weight: 400;
+    font-size: 0.72rem;
+    color: var(--ink-60);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .odds {
+    font-family: var(--font-data);
+    color: var(--clay);
+    font-weight: 500;
+  }
+  .implied {
+    color: var(--ink-60);
+  }
+  .fit-table__notes {
+    min-width: 20rem;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .dots {
+    display: inline-flex;
+    gap: 3px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 99px;
+    border: 1px solid var(--pine);
+    display: inline-block;
+  }
+  .dot--on {
+    background: var(--pine);
+  }
+</style>

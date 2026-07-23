@@ -1,0 +1,98 @@
+---
+// 21+ age gate shown on first visit, remembered in localStorage. Rendered inline
+// and revealed by script so it works without hydration and never blocks the build.
+---
+
+<div id="age-gate" class="age-gate" hidden role="dialog" aria-modal="true" aria-labelledby="age-gate-title">
+  <div class="age-gate__panel">
+    <p class="eyebrow">Before you enter</p>
+    <h2 id="age-gate-title">Are you 21 or older?</h2>
+    <p>
+      golfstats is editorial analysis of golf betting markets intended for adults
+      of legal age. It is not betting advice.
+    </p>
+    <div class="age-gate__actions">
+      <button type="button" id="age-yes" class="btn btn--solid">Yes, I'm 21+</button>
+      <a href="https://www.ncpgambling.org/" class="btn btn--ghost" rel="noopener">No, take me back</a>
+    </div>
+    <p class="age-gate__fine">
+      If you or someone you know has a gambling problem, call
+      <span class="num">1-800-GAMBLER</span>.
+    </p>
+  </div>
+</div>
+
+<style>
+  .age-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+    background: color-mix(in srgb, var(--ink) 78%, transparent);
+    backdrop-filter: blur(3px);
+  }
+  .age-gate__panel {
+    background: var(--paper);
+    border: var(--border);
+    border-radius: var(--radius);
+    padding: clamp(1.5rem, 5vw, 2.5rem);
+    max-width: 30rem;
+    box-shadow: 0 20px 50px -20px rgba(28, 27, 23, 0.5);
+  }
+  .age-gate__panel h2 {
+    margin-top: 0.2rem;
+  }
+  .age-gate__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 1.25rem 0 1rem;
+  }
+  .age-gate__fine {
+    font-size: var(--step--1);
+    color: var(--ink-60);
+    margin: 0;
+  }
+  .btn {
+    display: inline-block;
+    font-family: var(--font-data);
+    font-size: var(--step--1);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.7rem 1.2rem;
+    border-radius: var(--radius);
+    cursor: pointer;
+    text-decoration: none;
+    border: 1px solid var(--pine);
+  }
+  .btn--solid {
+    background: var(--pine);
+    color: var(--paper);
+  }
+  .btn--ghost {
+    background: transparent;
+    color: var(--pine);
+  }
+  .btn--solid:hover {
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+</style>
+
+<script>
+  const KEY = 'gs-age-verified-v1';
+  const gate = document.getElementById('age-gate');
+  if (gate && localStorage.getItem(KEY) !== 'true') {
+    gate.hidden = false;
+    document.documentElement.style.overflow = 'hidden';
+    const yes = document.getElementById('age-yes');
+    yes?.focus();
+    yes?.addEventListener('click', () => {
+      localStorage.setItem(KEY, 'true');
+      gate.hidden = true;
+      document.documentElement.style.overflow = '';
+    });
+  }
+</script>

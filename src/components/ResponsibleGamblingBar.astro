@@ -1,0 +1,72 @@
+---
+// Persistent, unobtrusive responsible-gambling notice. Fixed to the bottom, quiet
+// by design, dismissible for the session but always re-shown on a fresh visit.
+---
+
+<aside class="rg-bar" id="rg-bar" aria-label="Responsible gambling notice">
+  <p>
+    <strong>21+</strong> · Editorial analysis, not betting advice. If gambling
+    stops being fun, call <a href="tel:1-800-426-2537" class="num">1-800-GAMBLER</a>.
+  </p>
+  <button type="button" id="rg-dismiss" aria-label="Dismiss notice">&times;</button>
+</aside>
+
+<style>
+  .rg-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem clamp(0.75rem, 4vw, 1.5rem);
+    background: var(--ink);
+    color: var(--paper);
+    font-size: var(--step--1);
+  }
+  .rg-bar p {
+    margin: 0;
+    flex: 1;
+  }
+  .rg-bar strong {
+    color: var(--sand);
+    letter-spacing: 0.05em;
+  }
+  .rg-bar a {
+    color: var(--paper);
+    text-decoration: underline;
+  }
+  .rg-bar button {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--sand);
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--radius);
+  }
+  .rg-bar button:hover {
+    color: var(--paper);
+  }
+  /* Keep page content clear of the fixed bar. */
+  :global(body) {
+    padding-bottom: 3.5rem;
+  }
+</style>
+
+<script>
+  const bar = document.getElementById('rg-bar');
+  const dismiss = document.getElementById('rg-dismiss');
+  if (bar && sessionStorage.getItem('gs-rg-dismissed') === 'true') {
+    bar.style.display = 'none';
+    document.body.style.paddingBottom = '0';
+  }
+  dismiss?.addEventListener('click', () => {
+    sessionStorage.setItem('gs-rg-dismissed', 'true');
+    if (bar) bar.style.display = 'none';
+    document.body.style.paddingBottom = '0';
+  });
+</script>

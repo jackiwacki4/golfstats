@@ -1,0 +1,76 @@
+---
+import WindRose from './WindRose.astro';
+import type { TournamentWeather } from '../lib/weather';
+
+const { weather } = Astro.props as { weather: TournamentWeather };
+---
+
+<section class="plate weather" aria-labelledby="weather-title">
+  <div class="weather__head">
+    <div>
+      <p class="eyebrow">Weather · the variable that matters most</p>
+      <h2 id="weather-title">Four days of wind</h2>
+    </div>
+    <p class="weather__unit num">mph · from-direction</p>
+  </div>
+
+  <p class="weather__lede">
+    Wind is the one variable that reliably moves the math. Each rose points the way
+    the wind blows <em>from</em>; longer petals mean more hours out of that
+    quarter, darker steel means stronger gusts. Watch the afternoons.
+  </p>
+
+  <div class="weather__grid">
+    {weather.days.map((day) => <WindRose day={day} />)}
+  </div>
+
+  {
+    !weather.isLive && (
+      <p class="weather__note">
+        Showing <strong>sample</strong> wind data — live Open-Meteo forecast was
+        unavailable for these dates at build time. A daily rebuild refreshes this
+        automatically once the tournament is inside the forecast window.
+      </p>
+    )
+  }
+</section>
+
+<style>
+  .weather__head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .weather__unit {
+    font-size: var(--step--1);
+    color: var(--ink-60);
+    margin: 0;
+    letter-spacing: 0.04em;
+  }
+  .weather__lede {
+    color: var(--ink-60);
+    max-width: 60ch;
+  }
+  .weather__grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem 1rem;
+    margin-top: 0.5rem;
+  }
+  @media (min-width: 44rem) {
+    .weather__grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+  .weather__note {
+    margin: 1.25rem 0 0;
+    padding: 0.6rem 0.85rem;
+    background: var(--clay-tint);
+    border-left: 3px solid var(--clay);
+    border-radius: var(--radius);
+    font-size: var(--step--1);
+    color: var(--ink);
+  }
+</style>

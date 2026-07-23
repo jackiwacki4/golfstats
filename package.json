@@ -1,0 +1,23 @@
+{
+  "name": "golfstats",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Weekly PGA tournament preview site — understand this week's tournament in five minutes.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@fontsource-variable/fraunces": "^5.2.5",
+    "@fontsource-variable/public-sans": "^5.2.5",
+    "@fontsource/ibm-plex-mono": "^5.2.5",
+    "astro": "^5.13.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "typescript": "^5.7.3"
+  }
+}

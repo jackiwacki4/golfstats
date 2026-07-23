@@ -1,0 +1,90 @@
+event: 2026-3m-open
+players:
+  - player: marcus-vale
+    odds:
+      outright: 1400
+      format: american
+      asOf: "2026-07-21"
+      book: manual
+    fit:
+      rating: 5
+      notes: >
+        The cleanest fit in the field. Vale ranks near the top on approaches from
+        inside 150 and putts well on bentgrass — the two skills this course pays.
+        The price reflects it, so this is less a value flag than a confirmation
+        that the market and the profile agree.
+    result:
+      status: pending
+  - player: diego-santos
+    odds:
+      outright: 2200
+      format: american
+      asOf: "2026-07-21"
+      book: manual
+    fit:
+      rating: 4
+      notes: >
+        A wedge-first player whose length is average but whose short-iron
+        proximity has been elite over his last dozen starts. Wayward off the tee
+        at times, but the corridors here forgive that more than most venues.
+    result:
+      status: pending
+  - player: soren-brandt
+    odds:
+      outright: 3300
+      format: american
+      asOf: "2026-07-21"
+      book: manual
+    fit:
+      rating: 4
+      notes: >
+        The most interesting price on the board. Brandt's ball-striking fits a
+        birdie course, but he has been let down by a cold putter — the miss that
+        the market is pricing. If the stroke shows up on greens he reads well,
+        this number looks a full tier too long.
+    result:
+      status: pending
+  - player: kellen-pruitt
+    odds:
+      outright: 4000
+      format: american
+      asOf: "2026-07-21"
+      book: manual
+    fit:
+      rating: 3
+      notes: >
+        A bomber who gains most of his edge off the tee — exactly the edge this
+        course neutralises. Fair price for the talent, but the profile argues
+        against paying up. More of a fade at the number than a play.
+    result:
+      status: pending
+  - player: hiro-tanaka
+    odds:
+      outright: 5000
+      format: american
+      asOf: "2026-07-21"
+      book: manual
+    fit:
+      rating: 4
+      notes: >
+        Quietly one of the better wedge players in the field and a strong
+        bentgrass putter. Lacks the tee-to-green ceiling of the favourites, but
+        the skills that matter here are his strengths. Live at a triple-digit-adjacent
+        number.
+    result:
+      status: pending
+  - player: wes-holloway
+    odds:
+      outright: 2800
+      format: american
+      asOf: "2026-07-21"
+      book: manual
+    fit:
+      rating: 3
+      notes: >
+        Defending champion, and the market is charging for the narrative. The win
+        here was real, but his approach numbers have slipped since. Course history
+        is a thin reason to back a price this short — the read is that the story is
+        worth more to the book than to the bettor.
+    result:
+      status: pending

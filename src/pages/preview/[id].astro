@@ -1,0 +1,127 @@
+---
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import DemandsPanel from '../../components/DemandsPanel.astro';
+import FitTable from '../../components/FitTable.astro';
+import WeatherPanel from '../../components/WeatherPanel.astro';
+import MarketNotes from '../../components/MarketNotes.astro';
+import { getEventBundle, formatDateRange } from '../../lib/data';
+import { getTournamentWeather } from '../../lib/weather';
+
+export async function getStaticPaths() {
+  const previews = await getCollection('previews');
+  return previews.map((p) => ({ params: { id: p.id }, props: { preview: p } }));
+}
+
+const { preview } = Astro.props;
+const { Content } = await render(preview);
+
+const bundle = await getEventBundle(preview.data.event.id);
+if (!bundle) throw new Error(`Event bundle missing for ${preview.data.event.id}`);
+const { event, course, lines } = bundle;
+
+const weather = course
+  ? await getTournamentWeather(course.data.coords, event.data.startDate, event.data.endDate)
+  : null;
+const dateRange = formatDateRange(event.data.startDate, event.data.endDate);
+---
+
+<Base title={`${event.data.name} ${event.data.year} preview`} description={preview.data.dek}>
+  <article>
+    <header class="p-hero wrap">
+      <p class="eyebrow"><a href="/">This week</a> · Preview</p>
+      <h1 class="p-hero__title">{event.data.name}</h1>
+      <p class="p-hero__dek">{preview.data.dek}</p>
+      <p class="p-hero__meta num">
+        {course?.data.name} · {course?.data.location.city}, {course?.data.location.state}
+        <span class="p-hero__dot">·</span> {dateRange}
+      </p>
+    </header>
+
+    <div class="wrap p-layout">
+      <div class="p-main">
+        <div class="prose">
+          <Content />
+        </div>
+
+        {course && <DemandsPanel demands={course.data.demands} />}
+
+        <FitTable lines={lines} />
+
+        {weather && <WeatherPanel weather={weather} />}
+
+        {course && (
+          <p class="p-course-link">
+            <a href={`/course/${event.data.course.id}`}>
+              Full course profile & history for {course.data.name} →
+            </a>
+          </p>
+        )}
+      </div>
+
+      <div class="p-aside">
+        {preview.data.marketNotes && <MarketNotes notes={preview.data.marketNotes} />}
+      </div>
+    </div>
+  </article>
+</Base>
+
+<style>
+  .p-hero {
+    padding: clamp(1.75rem, 6vw, 3.5rem) 0 1.5rem;
+    border-bottom: 2px solid var(--pine);
+  }
+  .p-hero .eyebrow a {
+    color: inherit;
+  }
+  .p-hero__title {
+    font-size: var(--step-4);
+    margin: 0.2rem 0 0.4rem;
+  }
+  .p-hero__dek {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: var(--step-1);
+    color: var(--ink-60);
+    max-width: 46ch;
+    margin: 0 0 0.75rem;
+  }
+  .p-hero__meta {
+    font-size: var(--step--1);
+    color: var(--ink-60);
+    margin: 0;
+  }
+  .p-hero__dot {
+    margin: 0 0.4rem;
+    color: var(--sand);
+  }
+
+  .p-layout {
+    display: grid;
+    gap: 2.5rem;
+    padding-top: 2.5rem;
+    align-items: start;
+  }
+  @media (min-width: 60rem) {
+    .p-layout {
+      grid-template-columns: minmax(0, 1fr) 20rem;
+    }
+    .p-aside {
+      position: sticky;
+      top: 1.5rem;
+    }
+  }
+  .p-main {
+    display: grid;
+    gap: 2.25rem;
+    min-width: 0;
+  }
+  .p-main :global(.prose h2) {
+    font-size: var(--step-2);
+  }
+  .p-course-link {
+    font-family: var(--font-data);
+    font-size: var(--step--1);
+    margin: 0;
+  }
+</style>

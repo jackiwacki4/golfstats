@@ -1,0 +1,176 @@
+---
+// Renders a course's structured "demands" in golfer language with quiet bar meters.
+// Numbers are 1–5; the copy explains what a high bar MEANS, never just the number.
+interface Bucket {
+  range: string;
+  weight: number;
+}
+interface Demands {
+  drivingDistance: number;
+  approachBuckets: Bucket[];
+  roughSeverity: number;
+  greenSize: 'small' | 'medium' | 'large';
+  greenComplexity: number;
+  windExposure: number;
+}
+const { demands } = Astro.props as { demands: Demands };
+
+const meters: { label: string; value: number; hint: string }[] = [
+  {
+    label: 'Distance premium',
+    value: demands.drivingDistance,
+    hint: 'How much a length edge off the tee actually separates the field here.',
+  },
+  {
+    label: 'Rough severity',
+    value: demands.roughSeverity,
+    hint: 'How costly it is to miss the short grass.',
+  },
+  {
+    label: 'Green complexity',
+    value: demands.greenComplexity,
+    hint: 'How much the contours punish an approach in the wrong spot.',
+  },
+  {
+    label: 'Wind exposure',
+    value: demands.windExposure,
+    hint: 'How often the wind is a factor. See the four-day rose below.',
+    // steel-tinted because wind is weather
+  },
+];
+---
+
+<section class="plate demands" aria-labelledby="demands-title">
+  <p class="eyebrow">What the course demands</p>
+  <h2 id="demands-title">Read it as a golfer</h2>
+
+  <div class="demands__grid">
+    {
+      meters.map((m) => (
+        <div class="meter">
+          <div class="meter__head">
+            <span class="meter__label">{m.label}</span>
+            <span class="num meter__val" aria-hidden="true">
+              {m.value}<i>/5</i>
+            </span>
+          </div>
+          <div
+            class:list={['meter__track', { 'meter__track--wind': m.label === 'Wind exposure' }]}
+            role="meter"
+            aria-valuemin="1"
+            aria-valuemax="5"
+            aria-valuenow={m.value}
+            aria-label={`${m.label}: ${m.value} of 5`}
+          >
+            <span style={`--fill:${(m.value / 5) * 100}%`} />
+          </div>
+          <p class="meter__hint">{m.hint}</p>
+        </div>
+      ))
+    }
+  </div>
+
+  <div class="demands__approach">
+    <p class="eyebrow">Approach yardages that decide the week</p>
+    <ul class="buckets">
+      {
+        demands.approachBuckets.map((b) => (
+          <li>
+            <span class="num buckets__range">{b.range}<i> yds</i></span>
+            <span class="buckets__bar" style={`--w:${(b.weight / 5) * 100}%`} aria-hidden="true" />
+            <span class="num buckets__weight">{b.weight}/5</span>
+          </li>
+        ))
+      }
+    </ul>
+    <p class="meter__hint">
+      Tall bars = the yardages you'll see most and that best predict a good week.
+    </p>
+  </div>
+</section>
+
+<style>
+  .demands__grid {
+    display: grid;
+    gap: 1.25rem 2rem;
+    grid-template-columns: 1fr;
+    margin-bottom: 1.75rem;
+  }
+  @media (min-width: 34rem) {
+    .demands__grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .meter__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  .meter__label {
+    font-weight: 600;
+  }
+  .meter__val {
+    color: var(--ink-60);
+  }
+  .meter__val i {
+    font-style: normal;
+    opacity: 0.6;
+  }
+  .meter__track {
+    position: relative;
+    height: 8px;
+    background: var(--sand-30);
+    border-radius: 99px;
+    margin: 0.4rem 0 0.3rem;
+    overflow: hidden;
+  }
+  .meter__track span {
+    position: absolute;
+    inset: 0;
+    width: var(--fill);
+    background: var(--pine);
+    border-radius: 99px;
+  }
+  .meter__track--wind span {
+    background: var(--steel);
+  }
+  .meter__hint {
+    font-size: var(--step--1);
+    color: var(--ink-60);
+    margin: 0;
+  }
+  .demands__approach {
+    border-top: var(--border);
+    padding-top: 1.25rem;
+  }
+  .buckets {
+    list-style: none;
+    margin: 0 0 0.5rem;
+    padding: 0;
+    display: grid;
+    gap: 0.55rem;
+  }
+  .buckets li {
+    display: grid;
+    grid-template-columns: 6.5rem 1fr 2.5rem;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .buckets__range i {
+    font-style: normal;
+    color: var(--ink-60);
+  }
+  .buckets__bar {
+    height: 14px;
+    width: var(--w);
+    background: var(--pine);
+    opacity: 0.85;
+    border-radius: 2px;
+  }
+  .buckets__weight {
+    color: var(--ink-60);
+    text-align: right;
+    font-size: var(--step--1);
+  }
+</style>
