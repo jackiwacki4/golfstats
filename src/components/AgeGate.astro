@@ -33,6 +33,12 @@
     background: color-mix(in srgb, var(--ink) 78%, transparent);
     backdrop-filter: blur(3px);
   }
+  /* The hidden attribute alone won't hide this: author styles (this display:
+     grid) always beat the user-agent's [hidden] rule regardless of
+     specificity, so it has to be reasserted explicitly here. */
+  .age-gate[hidden] {
+    display: none;
+  }
   .age-gate__panel {
     background: var(--paper);
     border: var(--border);
