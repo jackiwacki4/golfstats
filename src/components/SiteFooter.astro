@@ -1,0 +1,93 @@
+---
+// Footer is structured so state-specific disclosures can be added later without a
+// redesign: the `disclosures` array is the only thing that grows.
+const disclosures: { state: string; text: string }[] = [
+  // Example of the shape a future state row takes — none active yet.
+  // { state: 'NJ', text: 'If you or someone you know has a gambling problem...' },
+];
+---
+
+<footer class="site-footer">
+  <div class="wrap site-footer__grid">
+    <div>
+      <p class="site-footer__mark">golfstats</p>
+      <p class="site-footer__tag">
+        Weekly PGA tournament previews. Understand this week's tournament in five
+        minutes.
+      </p>
+    </div>
+
+    <nav aria-label="Footer">
+      <a href="/">This week</a>
+      <a href="/archive">Archive</a>
+      <a href="https://www.ncpgambling.org/" rel="noopener">Get help</a>
+    </nav>
+
+    <div class="site-footer__legal">
+      <p>
+        <strong>This is editorial analysis, not betting advice.</strong> golfstats
+        does not accept wagers, does not sell picks, and does not guarantee any
+        outcome. Any odds shown are illustrative and hand-entered; verify current
+        prices with a licensed operator before acting on your own judgment.
+      </p>
+      <p>
+        You must be 21 or older to bet. If you or someone you know has a gambling
+        problem and wants help, call <span class="num">1-800-GAMBLER</span>.
+      </p>
+      {
+        disclosures.length > 0 && (
+          <ul class="site-footer__disclosures">
+            {disclosures.map((d) => (
+              <li>
+                <strong>{d.state}:</strong> {d.text}
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 2px solid var(--pine);
+    background: var(--paper-2);
+    margin-top: 4rem;
+    padding: 2.5rem 0;
+    font-size: var(--step--1);
+  }
+  .site-footer__grid {
+    display: grid;
+    gap: 1.75rem;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 46rem) {
+    .site-footer__grid {
+      grid-template-columns: 1.2fr 0.6fr 2fr;
+    }
+  }
+  .site-footer__mark {
+    font-family: var(--font-display);
+    font-size: var(--step-1);
+    margin: 0 0 0.25rem;
+  }
+  .site-footer__tag {
+    color: var(--ink-60);
+    margin: 0;
+    max-width: 24ch;
+  }
+  .site-footer nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .site-footer__legal p {
+    color: var(--ink-60);
+  }
+  .site-footer__disclosures {
+    margin: 0.5rem 0 0;
+    padding-left: 1.1rem;
+    color: var(--ink-60);
+  }
+</style>

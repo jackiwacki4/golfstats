@@ -1,0 +1,155 @@
+---
+// SIGNATURE ELEMENT. A per-day wind rose drawn in the style of an old course-
+// routing compass: petals point the direction the wind blows FROM, petal length
+// is how many hours blew from there, and darker steel = stronger average wind.
+// Deliberately the one bold thing on the site; everything else stays quiet.
+import type { DayWeather } from '../lib/weather';
+
+const { day } = Astro.props as { day: DayWeather };
+
+const CX = 60;
+const CY = 60;
+const MAX_R = 46;
+const HUB = 5;
+const SPEED_MAX = 20; // mph mapped to full ink
+
+const maxCount = Math.max(1, ...day.rose.map((b) => b.count));
+
+// Compass bearing -> screen point (N is up, clockwise).
+function pt(bearing: number, r: number): [number, number] {
+  const rad = ((bearing - 90) * Math.PI) / 180;
+  return [CX + r * Math.cos(rad), CY + r * Math.sin(rad)];
+}
+
+const petals = day.rose
+  .filter((b) => b.count > 0)
+  .map((b) => {
+    const len = HUB + (b.count / maxCount) * (MAX_R - HUB);
+    const [tx, ty] = pt(b.fromDeg, len);
+    const [lx, ly] = pt(b.fromDeg - 9, HUB + len * 0.35);
+    const [rx, ry] = pt(b.fromDeg + 9, HUB + len * 0.35);
+    const [bx, by] = pt(b.fromDeg, HUB);
+    const opacity = 0.28 + 0.62 * Math.min(1, b.avgSpeed / SPEED_MAX);
+    return {
+      d: `M ${bx.toFixed(1)} ${by.toFixed(1)} L ${lx.toFixed(1)} ${ly.toFixed(1)} L ${tx.toFixed(1)} ${ty.toFixed(1)} L ${rx.toFixed(1)} ${ry.toFixed(1)} Z`,
+      opacity: opacity.toFixed(2),
+      label: `${b.label}: ${b.count}h averaging ${b.avgSpeed} mph`,
+    };
+  });
+
+const cardinals = [
+  { t: 'N', b: 0 },
+  { t: 'E', b: 90 },
+  { t: 'S', b: 180 },
+  { t: 'W', b: 270 },
+];
+---
+
+<figure class="rose">
+  <figcaption class="rose__head">
+    <span class="rose__day">{day.weekday}</span>
+    <span class="num rose__stat">{day.avgSpeed}<i>avg</i></span>
+    <span class="num rose__stat rose__stat--max">{day.maxSpeed}<i>gust</i></span>
+  </figcaption>
+
+  <svg viewBox="0 0 120 120" role="img" aria-label={`Wind rose for ${day.weekday}: average ${day.avgSpeed} mph, gusting ${day.maxSpeed} mph, mostly from the ${day.dominant ?? 'variable'}.`}>
+    <!-- reference rings -->
+    <circle cx={CX} cy={CY} r={MAX_R} class="rose__ring" />
+    <circle cx={CX} cy={CY} r={MAX_R * 0.66} class="rose__ring" />
+    <circle cx={CX} cy={CY} r={MAX_R * 0.33} class="rose__ring" />
+    <!-- petals -->
+    {petals.map((p) => <path d={p.d} class="rose__petal" style={`opacity:${p.opacity}`}><title>{p.label}</title></path>)}
+    <circle cx={CX} cy={CY} r={HUB} class="rose__hub" />
+    <!-- cardinals -->
+    {
+      cardinals.map((c) => {
+        const [x, y] = pt(c.b, MAX_R + 8);
+        return (
+          <text x={x} y={y} class="rose__card" text-anchor="middle" dominant-baseline="middle">
+            {c.t}
+          </text>
+        );
+      })
+    }
+  </svg>
+
+  <p class="rose__foot">
+    {
+      day.dominant
+        ? <>Mostly from the <strong>{day.dominant}</strong></>
+        : <>Variable / calm</>
+    }
+    {day.maxPrecipProb >= 30 && <span class="rose__rain"> · rain {day.maxPrecipProb}%</span>}
+  </p>
+</figure>
+
+<style>
+  .rose {
+    margin: 0;
+    text-align: center;
+  }
+  .rose__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.6rem;
+    margin-bottom: 0.25rem;
+  }
+  .rose__day {
+    font-family: var(--font-display);
+    font-size: var(--step-1);
+    font-weight: 600;
+  }
+  .rose__stat {
+    color: var(--steel);
+    font-size: var(--step--1);
+    font-weight: 500;
+  }
+  .rose__stat i {
+    font-style: normal;
+    color: var(--ink-60);
+    margin-left: 1px;
+    font-size: 0.65em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .rose__stat--max {
+    opacity: 0.75;
+  }
+  svg {
+    width: 100%;
+    max-width: 180px;
+    height: auto;
+  }
+  .rose__ring {
+    fill: none;
+    stroke: var(--sand);
+    stroke-width: 0.6;
+    opacity: 0.6;
+  }
+  .rose__petal {
+    fill: var(--steel);
+    stroke: var(--paper);
+    stroke-width: 0.4;
+  }
+  .rose__hub {
+    fill: var(--ink);
+  }
+  .rose__card {
+    fill: var(--ink-60);
+    font-family: var(--font-data);
+    font-size: 7px;
+    letter-spacing: 0.05em;
+  }
+  .rose__foot {
+    margin: 0.25rem 0 0;
+    font-size: var(--step--1);
+    color: var(--ink-60);
+  }
+  .rose__foot strong {
+    color: var(--ink);
+  }
+  .rose__rain {
+    color: var(--steel);
+  }
+</style>

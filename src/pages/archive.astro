@@ -1,0 +1,110 @@
+---
+import Base from '../layouts/Base.astro';
+import { getPreviewsByDate, resolveEntries, formatDateRange } from '../lib/data';
+import { getEntry } from 'astro:content';
+
+const previews = await getPreviewsByDate();
+const rows = await Promise.all(
+  previews.map(async (p) => {
+    const event = await getEntry(p.data.event);
+    const course = event ? await getEntry(event.data.course) : null;
+    const lines = await resolveEntries(p.data.event.id);
+    const winner = lines
+      .filter((l) => l.result.status === 'finished' && l.result.finish != null)
+      .sort((a, b) => (a.result.finish ?? 99) - (b.result.finish ?? 99))[0];
+    return { preview: p, event, course, winner };
+  })
+);
+---
+
+<Base title="Archive" description="Past PGA tournament previews, with results attached.">
+  <div class="wrap archive">
+    <header class="archive__hero">
+      <p class="eyebrow">The record</p>
+      <h1>Archive</h1>
+      <p class="archive__lede">
+        Every past preview, with how the read actually played out. Being publicly
+        wrong on record is a feature — it's the credibility mechanism.
+      </p>
+    </header>
+
+    <ul class="archive__list">
+      {
+        rows.map(({ preview, event, course, winner }) => (
+          <li class="archive__row">
+            <div class="archive__meta">
+              <a href={`/preview/${preview.id}`} class="archive__title">
+                {event?.data.name} <span class="num">{event?.data.year}</span>
+              </a>
+              <p class="archive__sub num">
+                {course?.data.name}
+                {event && <> · {formatDateRange(event.data.startDate, event.data.endDate)}</>}
+              </p>
+            </div>
+            <div class="archive__result">
+              {winner ? (
+                <span>Winner: <strong>{winner.name}</strong></span>
+              ) : (
+                <span class="archive__pending">Upcoming · result pending</span>
+              )}
+            </div>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</Base>
+
+<style>
+  .archive {
+    padding-top: clamp(1.75rem, 6vw, 3rem);
+  }
+  .archive__hero h1 {
+    font-size: var(--step-3);
+    margin: 0.2rem 0 0.5rem;
+  }
+  .archive__lede {
+    color: var(--ink-60);
+    max-width: 56ch;
+  }
+  .archive__list {
+    list-style: none;
+    margin: 2rem 0 0;
+    padding: 0;
+  }
+  .archive__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 1.1rem 0;
+    border-bottom: var(--border);
+  }
+  .archive__row:first-child {
+    border-top: 2px solid var(--pine);
+  }
+  .archive__title {
+    font-family: var(--font-display);
+    font-size: var(--step-1);
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--ink);
+  }
+  .archive__title:hover {
+    color: var(--clay);
+  }
+  .archive__sub {
+    font-size: var(--step--1);
+    color: var(--ink-60);
+    margin: 0.15rem 0 0;
+  }
+  .archive__result {
+    font-size: var(--step--1);
+    text-align: right;
+  }
+  .archive__pending {
+    color: var(--ink-60);
+    font-style: italic;
+  }
+</style>

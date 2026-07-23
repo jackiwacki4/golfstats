@@ -1,0 +1,197 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import DemandsPanel from '../../components/DemandsPanel.astro';
+import CourseMap from '../../components/CourseMap.astro';
+import { resolveEntries, formatDateRange } from '../../lib/data';
+
+export async function getStaticPaths() {
+  const courses = await getCollection('courses');
+  return courses.map((c) => ({ params: { id: c.id }, props: { course: c } }));
+}
+
+const { course } = Astro.props;
+
+// Every event played here, newest first, with how it went.
+const allEvents = await getCollection('events');
+const allPreviews = await getCollection('previews');
+const history = (
+  await Promise.all(
+    allEvents
+      .filter((e) => e.data.course.id === course.id)
+      .sort((a, b) => b.data.year - a.data.year)
+      .map(async (e) => {
+        const lines = await resolveEntries(e.id);
+        const finished = lines
+          .filter((l) => l.result.status === 'finished' && l.result.finish != null)
+          .sort((a, b) => (a.result.finish ?? 99) - (b.result.finish ?? 99));
+        const preview = allPreviews.find((p) => p.data.event.id === e.id);
+        return {
+          event: e,
+          winner: finished[0] ?? null,
+          resolved: finished.length > 0,
+          previewId: preview?.id ?? null,
+        };
+      })
+  )
+);
+
+const profileParas = course.data.profile.trim().split(/\n\s*\n/);
+---
+
+<Base title={`${course.data.name} — course profile`} description={`Course profile and event history for ${course.data.name}.`}>
+  <article class="wrap course">
+    <header class="course__hero reveal">
+      <p class="eyebrow">Course profile</p>
+      <h1>{course.data.name}</h1>
+      <p class="course__loc num">
+        {course.data.location.city}, {course.data.location.state} · Par {course.data.par} · {course.data.yardage.toLocaleString()} yds
+      </p>
+      <dl class="course__facts">
+        <div><dt>Architect</dt><dd>{course.data.architect}</dd></div>
+        <div><dt>Greens</dt><dd>{course.data.greenType}</dd></div>
+        {course.data.established && <div><dt>Opened</dt><dd class="num">{course.data.established}</dd></div>}
+      </dl>
+    </header>
+
+    <div class="course__lede reveal">
+      <div class="course__profile prose">
+        {profileParas.map((para) => <p>{para}</p>)}
+      </div>
+      <div class="course__map">
+        <CourseMap demands={course.data.demands} />
+      </div>
+    </div>
+
+    <DemandsPanel demands={course.data.demands} />
+
+    <section class="course__history reveal" aria-labelledby="history-title">
+      <p class="eyebrow">Played here</p>
+      <h2 id="history-title">How past events went</h2>
+      <p class="course__history-note">
+        Every event we've previewed at this course, with the result attached once
+        it's in the books. Being on record — right or wrong — is the point.
+      </p>
+      <ul class="history">
+        {
+          history.map((h) => (
+            <li class="history__row">
+              <div>
+                <p class="history__event">{h.event.data.name} <span class="num">{h.event.data.year}</span></p>
+                <p class="history__dates num">{formatDateRange(h.event.data.startDate, h.event.data.endDate)}</p>
+              </div>
+              <div class="history__result">
+                {h.resolved && h.winner ? (
+                  <span class="history__winner">Winner: <strong>{h.winner.name}</strong></span>
+                ) : (
+                  <span class="history__pending">Result pending</span>
+                )}
+                {h.previewId && (
+                  <a href={`/preview/${h.previewId}`} class="history__link">View preview →</a>
+                )}
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+  </article>
+</Base>
+
+<style>
+  .course {
+    padding-top: clamp(1.75rem, 6vw, 3rem);
+    display: grid;
+    gap: 2.25rem;
+  }
+  .course__hero h1 {
+    font-size: var(--step-3);
+    margin: 0.2rem 0 0.4rem;
+  }
+  .course__lede {
+    display: grid;
+    gap: 2rem;
+    align-items: start;
+  }
+  @media (min-width: 50rem) {
+    .course__lede {
+      grid-template-columns: 1fr 18rem;
+    }
+  }
+  .course__map {
+    background: var(--panel);
+    border: var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1rem 0.75rem;
+  }
+  .course__loc {
+    font-size: var(--step--1);
+    color: var(--ink-60);
+    margin: 0 0 1rem;
+  }
+  .course__facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem 2rem;
+    margin: 0;
+    padding-top: 1rem;
+    border-top: var(--border);
+  }
+  .course__facts dt {
+    font-family: var(--font-data);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-60);
+  }
+  .course__facts dd {
+    margin: 0.15rem 0 0;
+    font-weight: 600;
+  }
+  .course__history-note {
+    color: var(--ink-60);
+    max-width: 58ch;
+  }
+  .history {
+    list-style: none;
+    margin: 1rem 0 0;
+    padding: 0;
+  }
+  .history__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 1rem 0;
+    border-bottom: var(--border);
+  }
+  .history__row:first-child {
+    border-top: 2px solid var(--pine);
+  }
+  .history__event {
+    font-weight: 600;
+    margin: 0;
+  }
+  .history__dates {
+    font-size: var(--step--1);
+    color: var(--ink-60);
+    margin: 0.1rem 0 0;
+  }
+  .history__result {
+    text-align: right;
+    font-size: var(--step--1);
+  }
+  .history__winner {
+    color: var(--ink);
+  }
+  .history__pending {
+    color: var(--ink-60);
+    font-style: italic;
+  }
+  .history__link {
+    display: block;
+    font-family: var(--font-data);
+    margin-top: 0.2rem;
+  }
+</style>

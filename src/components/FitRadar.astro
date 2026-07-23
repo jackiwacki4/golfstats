@@ -1,0 +1,105 @@
+---
+// Small-multiple radar: the course's demand shape (muted, shared reference)
+// overlaid with one player's skill shape (colored) on the same 4 axes. This is
+// the graphic version of the fit rating — a reader can see the match instead
+// of reading a scalar.
+import { radarPolygon, radarRing, radarLabelPoints, type RadarAxes } from '../lib/radar';
+
+interface Props {
+  course: RadarAxes;
+  player: RadarAxes;
+  name: string;
+  rating: number;
+}
+const { course, player, name, rating } = Astro.props;
+
+const SIZE = 132;
+const CX = SIZE / 2;
+const CY = SIZE / 2 - 4;
+const MAX_R = 44;
+
+const coursePts = radarPolygon(course, CX, CY, MAX_R);
+const playerPts = radarPolygon(player, CX, CY, MAX_R);
+const labels = radarLabelPoints(CX, CY, MAX_R + 14);
+
+const tier = rating >= 4.5 ? 'strong' : rating >= 3.5 ? 'good' : rating >= 2.5 ? 'mixed' : 'weak';
+---
+
+<figure class="fit-radar" data-tier={tier}>
+  <svg viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label={`${name} skill profile against course demands, fit rated ${rating} of 5`}>
+    <polygon points={radarRing(CX, CY, MAX_R, 1)} class="fr-ring" />
+    <polygon points={radarRing(CX, CY, MAX_R, 0.66)} class="fr-ring" />
+    <polygon points={radarRing(CX, CY, MAX_R, 0.33)} class="fr-ring" />
+
+    <polygon points={coursePts} class="fr-course" />
+    <polygon points={playerPts} class="fr-player" />
+
+    {
+      labels.map((l) => (
+        <text x={l.x} y={l.y} class="fr-label" text-anchor="middle" dominant-baseline="middle">
+          {l.label}
+        </text>
+      ))
+    }
+  </svg>
+  <figcaption>
+    <span class="fr-name">{name}</span>
+    <span class="fr-fit num">{rating}<i>/5 fit</i></span>
+  </figcaption>
+</figure>
+
+<style>
+  .fit-radar {
+    margin: 0;
+    text-align: center;
+  }
+  svg {
+    width: 100%;
+    max-width: 148px;
+    height: auto;
+  }
+  .fr-ring {
+    fill: none;
+    stroke: var(--mist);
+    stroke-width: 0.75;
+  }
+  .fr-course {
+    fill: var(--ink-tint);
+    stroke: var(--ink-55);
+    stroke-width: 1.25;
+    stroke-dasharray: 3 2;
+  }
+  .fr-player {
+    fill: var(--turf-tint);
+    stroke: var(--turf);
+    stroke-width: 2;
+  }
+  [data-tier='weak'] .fr-player {
+    fill: var(--signal-tint);
+    stroke: var(--signal);
+  }
+  .fr-label {
+    font-family: var(--font-data);
+    font-size: 6.5px;
+    letter-spacing: 0.04em;
+    fill: var(--ink-55);
+  }
+  figcaption {
+    margin-top: 0.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+  .fr-name {
+    font-size: var(--step--1);
+    font-weight: 600;
+  }
+  .fr-fit {
+    font-size: 0.72rem;
+    color: var(--ink-55);
+  }
+  .fr-fit i {
+    font-style: normal;
+    opacity: 0.7;
+  }
+</style>

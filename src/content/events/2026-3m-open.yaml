@@ -1,0 +1,11 @@
+name: 3M Open
+year: 2026
+startDate: "2026-07-23"
+endDate: "2026-07-26"
+course: tpc-twin-cities
+purse: 8400000
+# A standalone summer stop: some marquee names skip it, so the field is beatable
+# and the board is deep with capable birdie-makers rather than a handful of stars.
+fieldStrength: 2
+tour: PGA
+defendingChampion: wes-holloway

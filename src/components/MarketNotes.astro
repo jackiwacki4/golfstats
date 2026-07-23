@@ -1,0 +1,58 @@
+---
+// Where the price looks fair vs stretched. Editorial market read — never a pick.
+const { notes } = Astro.props as { notes: { label: string; note: string }[] };
+---
+
+<aside class="plate market reveal" aria-labelledby="market-title">
+  <p class="eyebrow">The market</p>
+  <h2 id="market-title" class="market__h">Fair vs stretched</h2>
+  <ul class="market__list">
+    {
+      notes.map((n) => (
+        <li>
+          <p class="market__label">{n.label}</p>
+          <p class="market__note">{n.note}</p>
+        </li>
+      ))
+    }
+  </ul>
+  <p class="market__disc">
+    Illustrative, hand-entered prices. This is analysis, not advice — form your
+    own opinion and verify current lines with a licensed operator.
+  </p>
+</aside>
+
+<style>
+  .market__h {
+    font-size: var(--step-1);
+    margin-bottom: 1rem;
+  }
+  .market__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 1.1rem;
+  }
+  .market__list li {
+    padding-left: 0.9rem;
+    border-left: 3px solid var(--clay);
+  }
+  .market__label {
+    font-weight: 600;
+    margin: 0 0 0.2rem;
+  }
+  .market__note {
+    margin: 0;
+    font-size: var(--step--1);
+    color: var(--ink-60);
+    line-height: 1.55;
+  }
+  .market__disc {
+    margin: 1.25rem 0 0;
+    padding-top: 0.85rem;
+    border-top: var(--border);
+    font-size: 0.78rem;
+    color: var(--ink-60);
+  }
+</style>

@@ -1,0 +1,55 @@
+name: TPC Twin Cities
+location:
+  city: Blaine
+  state: Minnesota
+  country: USA
+coords:
+  lat: 45.1607
+  lng: -93.2436
+par: 71
+yardage: 7431
+greenType: Bentgrass
+architect: Arnold Palmer (with Tom Lehman, consulting)
+established: 2000
+
+demands:
+  # Distance helps but does not separate the field — the corridors are generous
+  # and the fight is on the second shot, not off the tee.
+  drivingDistance: 3
+  approachBuckets:
+    # A wedge course. Most scoring chances arrive from inside 150, and the winner
+    # is usually whoever is sharpest with the short irons.
+    - range: "100-125"
+      weight: 5
+    - range: "125-150"
+      weight: 5
+    - range: "150-175"
+      weight: 3
+    - range: "175-200"
+      weight: 2
+  # Rough is grown up in spots but this is not a penal test off the tee.
+  roughSeverity: 3
+  greenSize: large
+  # Palmer greens with enough contour to punish a lazy wedge, not tricked up.
+  greenComplexity: 3
+  # Parkland, tree-lined, inland. Wind is a factor only when a front moves through —
+  # water on 27 holes means a gust near the hazards changes club, not the whole day.
+  windExposure: 2
+
+profile: |
+  TPC Twin Cities is a birdie course, and it does not pretend otherwise. Arnold
+  Palmer routed it across former farmland and wetland north of Minneapolis, and
+  water is in play on the majority of holes — but the water rarely sits between
+  you and a good score. It frames, it intimidates, and once or twice a week it
+  swallows a bad swing whole. Mostly it just looks dangerous.
+
+  The tee shots are wide enough that distance is a convenience rather than a
+  weapon. What decides the week is the wedge. Players spend the round staring at
+  100-to-150-yard approaches, and the leaderboard sorts itself by who is stuffing
+  those to tap-in range and who is settling for twenty feet. Proximity from inside
+  150 is the single number that best predicts a good week here.
+
+  The par 5s are reachable and the greens are large, so the ceiling for a hot round
+  is very high — someone will go low, probably more than once. The credible read is
+  never "who survives" but "who can keep the foot down for four days without the
+  one loose finish near the water that costs a stroke the birdies can't buy back."
