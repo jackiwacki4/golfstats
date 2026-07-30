@@ -132,11 +132,35 @@ export interface FetchEventsOptions {
   seriesTicker?: string;
 }
 
-/** Open events with their markets nested — one call instead of N+1. */
+/**
+ * Short-lived in-memory cache for the full board.
+ *
+ * On disk this would be tens of megabytes of JSON; in memory it just makes the
+ * second click on "Run the numbers" instant. Kept brief so a refresh still
+ * means a refresh.
+ */
+let boardCache: { at: number; events: KalshiEvent[] } | null = null;
+const BOARD_TTL_MS = 90_000;
+
+/**
+ * Every open event, with markets nested.
+ *
+ * This walks the whole board — roughly 48 pages, 9,400 events, 77,000 markets,
+ * about 25 seconds — and that is deliberate rather than lazy. Kalshi's cursor
+ * order has no relationship to when things resolve, so a truncated sweep is not
+ * a smaller board, it's an arbitrary one: capping at six pages returned 1,200
+ * events containing *zero* of today's sports markets. Filtering by resolution
+ * time only works if the whole board was in hand to filter.
+ */
 export async function fetchOpenEvents(
   options: FetchEventsOptions = {},
 ): Promise<KalshiEvent[]> {
-  return paginate<KalshiEvent, EventsResponse>(
+  const full = !options.seriesTicker;
+  if (full && boardCache && Date.now() - boardCache.at < BOARD_TTL_MS) {
+    return boardCache.events;
+  }
+
+  const events = await paginate<KalshiEvent, EventsResponse>(
     "/events",
     {
       limit: 200,
@@ -145,8 +169,60 @@ export async function fetchOpenEvents(
       series_ticker: options.seriesTicker,
     },
     (page) => page.events ?? [],
-    options.maxPages ?? 8,
+    options.maxPages ?? 60,
   );
+
+  if (full) boardCache = { at: Date.now(), events };
+  return events;
+}
+
+/**
+ * Markets closing inside a time window, filtered server-side.
+ *
+ * This is the right way to build a day-of board and it isn't a micro-
+ * optimisation. Kalshi's open board is overwhelmingly long-dated — of ~8,000
+ * open markets, around 99% close more than 90 days out, and plenty run to 2099.
+ * Paginating `/events` walks that haystack in cursor order and can return
+ * nothing closing today at all. `min_close_ts`/`max_close_ts` ask the exchange
+ * for the slate directly.
+ */
+export async function fetchMarketsClosingBetween(
+  startMs: number,
+  endMs: number,
+  maxPages = 10,
+): Promise<KalshiMarket[]> {
+  return paginate<KalshiMarket, MarketsResponse>(
+    "/markets",
+    {
+      limit: 200,
+      status: "open",
+      min_close_ts: Math.floor(startMs / 1000),
+      max_close_ts: Math.floor(endMs / 1000),
+    },
+    (page) => page.markets ?? [],
+    maxPages,
+  );
+}
+
+/**
+ * One event with its markets nested.
+ *
+ * Needed because `/markets` returns no event metadata, and the structural
+ * signals depend on it — `mutually_exclusive` and the event's full leg list are
+ * what make dutch-book and overround checks possible. Fetching the event also
+ * picks up legs whose close times fell outside the window.
+ */
+export async function fetchEvent(eventTicker: string): Promise<KalshiEvent | null> {
+  try {
+    const response = await get<{ event?: KalshiEvent } & Partial<KalshiEvent>>(
+      `/events/${encodeURIComponent(eventTicker)}`,
+      { with_nested_markets: "true" },
+    );
+    const event = response.event ?? (response as KalshiEvent);
+    return event?.event_ticker ? event : null;
+  } catch {
+    return null; // one bad event shouldn't sink the slate
+  }
 }
 
 /** Settled markets for one series — the raw material for base-rate models. */

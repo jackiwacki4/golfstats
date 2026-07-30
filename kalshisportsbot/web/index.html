@@ -4,12 +4,13 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
-<title>kalshisportsbot</title>
+<title>Today's Board</title>
 <style>
   :root {
     color-scheme: light;
     --surface:   #fcfcfb;
     --plane:     #f9f9f7;
+    --raised:    #ffffff;
     --ink:       #0b0b0b;
     --ink-2:     #52514e;
     --muted:     #898781;
@@ -23,357 +24,374 @@
     --good-text: #006300;
     --accent:    #2a78d6;
 
-    --radius: 10px;
-    --mono: ui-monospace, "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    --r: 14px;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 14px rgba(0,0,0,.04);
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) {
       color-scheme: dark;
-      --surface: #1a1a19;
-      --plane:   #0d0d0d;
-      --ink:     #ffffff;
-      --ink-2:   #c3c2b7;
-      --muted:   #898781;
-      --rule:    #2c2c2a;
-      --axis:    #383835;
-      --good-text: #0ca30c;
-      --accent:  #3987e5;
+      --surface: #1a1a19; --plane: #0d0d0d; --raised: #212120;
+      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --rule: #2c2c2a; --axis: #383835;
+      --good-text: #0ca30c; --accent: #3987e5;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
-    --surface: #1a1a19;
-    --plane:   #0d0d0d;
-    --ink:     #ffffff;
-    --ink-2:   #c3c2b7;
-    --muted:   #898781;
-    --rule:    #2c2c2a;
-    --axis:    #383835;
-    --good-text: #0ca30c;
-    --accent:  #3987e5;
+    --surface: #1a1a19; --plane: #0d0d0d; --raised: #212120;
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --rule: #2c2c2a; --axis: #383835;
+    --good-text: #0ca30c; --accent: #3987e5;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
   }
 
   * { box-sizing: border-box; }
   body {
-    margin: 0;
-    background: var(--plane);
-    color: var(--ink);
-    font-family: var(--sans);
-    font-size: 15px;
-    line-height: 1.5;
+    margin: 0; background: var(--plane); color: var(--ink);
+    font-family: var(--sans); font-size: 16px; line-height: 1.55;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 72px; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 28px 20px 80px; }
 
-  /* --- Header --------------------------------------------------------- */
-  header {
-    display: flex; flex-wrap: wrap; gap: 16px;
-    align-items: baseline; justify-content: space-between;
-    padding-bottom: 16px; border-bottom: 1px solid var(--rule); margin-bottom: 20px;
-  }
-  h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
-  h1 span { color: var(--muted); font-weight: 400; }
-  .theme-toggle {
-    background: none; border: 1px solid var(--rule); color: var(--ink-2);
-    border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px;
-  }
+  /* --- Masthead -------------------------------------------------------- */
+  .masthead { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 26px; }
+  .brand { font-size: 14px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .icon-btn { background: none; border: 1px solid var(--rule); color: var(--ink-2); border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+  .icon-btn:hover { border-color: var(--axis); }
 
-  /* --- Controls ------------------------------------------------------- */
+  .hero { margin-bottom: 24px; }
+  .slate-tag {
+    display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .07em; color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 999px; padding: 3px 12px; margin-bottom: 12px;
+  }
+  h1 { font-size: clamp(26px, 4.4vw, 38px); line-height: 1.15; margin: 0 0 8px; letter-spacing: -.022em; }
+  .sub { color: var(--ink-2); font-size: 16.5px; max-width: 58ch; margin: 0; }
+
+  /* --- Controls --------------------------------------------------------- */
   .controls {
-    display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
-    background: var(--surface); border: 1px solid var(--rule);
-    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 20px;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    margin: 22px 0 14px; padding: 12px 14px;
+    background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r);
   }
-  .field { display: flex; flex-direction: column; gap: 4px; }
-  .field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
-  .field input, .field select {
-    background: var(--plane); color: var(--ink);
-    border: 1px solid var(--axis); border-radius: 6px;
-    padding: 6px 8px; font-size: 14px; font-family: var(--mono); min-width: 96px;
+  .seg { display: inline-flex; background: var(--plane); border: 1px solid var(--rule); border-radius: 9px; padding: 2px; }
+  .seg button {
+    border: 0; background: none; color: var(--ink-2); font-size: 13.5px; font-weight: 500;
+    padding: 6px 13px; border-radius: 7px; cursor: pointer; font-family: inherit;
   }
-  button.run {
-    background: var(--accent); color: #fff; border: 0; border-radius: 6px;
-    padding: 9px 18px; font-size: 14px; font-weight: 600; cursor: pointer; margin-left: auto;
+  .seg button[aria-pressed="true"] { background: var(--raised); color: var(--ink); font-weight: 650; box-shadow: var(--shadow); }
+  .ctl-label { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .controls input[type=number] {
+    width: 68px; background: var(--plane); color: var(--ink); border: 1px solid var(--axis);
+    border-radius: 7px; padding: 6px 8px; font-family: var(--mono); font-size: 14px;
   }
-  button.run:disabled { opacity: 0.55; cursor: progress; }
-
-  /* --- Stat tiles ------------------------------------------------------ */
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 22px; }
-  .tile { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 12px 14px; }
-  .tile .n { font-size: 22px; font-weight: 650; font-family: var(--mono); letter-spacing: -0.02em; }
-  .tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 2px; }
-
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); margin: 28px 0 10px; }
-  h2 .sub { text-transform: none; letter-spacing: 0; color: var(--muted); font-weight: 400; }
-
-  /* --- Cards ----------------------------------------------------------- */
-  .card {
-    background: var(--surface); border: 1px solid var(--rule);
-    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px;
+  .run {
+    margin-left: auto; background: var(--accent); color: #fff; border: 0; border-radius: 9px;
+    padding: 10px 20px; font-size: 14.5px; font-weight: 650; cursor: pointer; font-family: inherit;
   }
-  .card-head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
-  .rank { font-family: var(--mono); color: var(--muted); font-size: 13px; min-width: 22px; }
-  .pick { font-weight: 650; font-size: 16px; }
-  .event { color: var(--ink-2); font-size: 13px; flex: 1 1 260px; }
-  .ticker { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .run:disabled { opacity: .55; cursor: progress; }
 
-  .row { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 10px; }
-  .metric { display: flex; flex-direction: column; }
-  .metric .v { font-family: var(--mono); font-size: 15px; font-weight: 600; }
-  .metric .l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .summary { display: flex; flex-wrap: wrap; gap: 18px; font-size: 12.5px; color: var(--muted); margin-bottom: 26px; padding: 0 2px; }
+  .summary b { font-family: var(--mono); color: var(--ink-2); font-weight: 600; }
 
-  /* Edge meter: a mark, anchored at zero, rounded at the data end. */
-  .meter { height: 6px; background: var(--rule); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  /* --- Sections --------------------------------------------------------- */
+  .section-head {
+    display: flex; align-items: baseline; gap: 10px;
+    margin: 30px 0 12px; padding-bottom: 8px; border-bottom: 2px solid var(--rule);
+  }
+  .section-head h2 { font-size: 15px; margin: 0; letter-spacing: .04em; text-transform: uppercase; }
+  .section-head .count { font-size: 12.5px; color: var(--muted); }
+
+  /* --- Pick card -------------------------------------------------------- */
+  .pick {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r);
+    padding: 18px 20px; margin-bottom: 12px; box-shadow: var(--shadow);
+  }
+  .pick-top { display: flex; gap: 14px; align-items: flex-start; }
+  .rank {
+    flex: none; width: 30px; height: 30px; border-radius: 8px; background: var(--plane);
+    border: 1px solid var(--rule); display: grid; place-items: center;
+    font-family: var(--mono); font-size: 13px; color: var(--ink-2); font-weight: 650;
+  }
+  .pick-title { flex: 1; min-width: 0; }
+  .pick-title h3 { margin: 0 0 3px; font-size: 19px; letter-spacing: -.012em; }
+  .pick-title .q { color: var(--ink-2); font-size: 14.5px; }
+  .pick-title .when { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+
+  .numbers { display: flex; flex-wrap: wrap; gap: 26px; margin: 16px 0 0; }
+  .num .v { font-family: var(--mono); font-size: 20px; font-weight: 650; letter-spacing: -.02em; display: block; }
+  .num .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .num.edge .v { color: var(--good-text); }
+
+  .meter { height: 6px; background: var(--rule); border-radius: 3px; margin: 14px 0 0; overflow: hidden; }
   .meter > i { display: block; height: 100%; border-radius: 3px; background: var(--good); }
 
-  .why { margin-top: 10px; border-top: 1px solid var(--rule); padding-top: 8px; }
-  .why div { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; }
-  .why b { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+  .say { margin: 14px 0 0; font-size: 15px; color: var(--ink-2); }
 
-  /* Status chips always pair an icon with a label — never color alone. */
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
   .chip {
-    font-size: 11px; border-radius: 999px; padding: 2px 9px;
-    border: 1px solid var(--axis); color: var(--ink-2); display: inline-flex; gap: 4px; align-items: center;
+    font-size: 11.5px; border-radius: 999px; padding: 3px 10px; border: 1px solid var(--axis);
+    color: var(--ink-2); display: inline-flex; gap: 5px; align-items: center; white-space: nowrap;
   }
-  .chip.good     { border-color: var(--good);     color: var(--good-text); }
-  .chip.warning  { border-color: var(--warning); }
-  .chip.serious  { border-color: var(--serious); }
-  .chip.critical { border-color: var(--critical); color: var(--critical); }
+  .chip.strong   { border-color: var(--good);     color: var(--good-text); }
+  .chip.moderate { border-color: var(--warning); }
+  .chip.thin     { border-color: var(--serious); }
+  .chip.flag     { border-color: var(--serious); }
+  .chip.future   { border-color: var(--accent); color: var(--accent); }
 
-  .arb { border-left: 3px solid var(--good); }
-  .legs { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); margin-top: 8px; line-height: 1.7; }
+  .ticket {
+    margin-top: 14px; padding: 12px 14px; background: var(--plane);
+    border: 1px solid var(--rule); border-radius: 10px;
+    display: flex; flex-wrap: wrap; gap: 20px; align-items: baseline;
+  }
+  .ticket .t { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); display: block; }
+  .ticket .m { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+  .win { color: var(--good-text); } .lose { color: var(--critical); }
 
-  .empty { background: var(--surface); border: 1px dashed var(--axis); border-radius: var(--radius); padding: 28px; text-align: center; color: var(--ink-2); }
-  .empty strong { display: block; font-size: 16px; color: var(--ink); margin-bottom: 6px; }
-  .notes { margin-top: 24px; font-size: 12.5px; color: var(--muted); }
-  .notes div { margin-top: 3px; }
+  details { margin-top: 12px; }
+  details summary { cursor: pointer; font-size: 13px; color: var(--accent); list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before { content: "▸ "; }
+  details[open] summary::before { content: "▾ "; }
+  .drivers { margin-top: 10px; border-left: 2px solid var(--rule); padding-left: 14px; }
+  .drivers div { font-size: 13.5px; color: var(--ink-2); margin-bottom: 7px; }
+  .drivers b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .meta-line { margin-top: 10px; font-size: 11.5px; color: var(--muted); font-family: var(--mono); }
+  .meta-line a { color: var(--accent); }
+
+  /* --- Edges ------------------------------------------------------------ */
+  .edge-card { background: var(--surface); border: 1px solid var(--rule); border-left: 4px solid var(--good); border-radius: var(--r); padding: 16px 18px; margin-bottom: 12px; box-shadow: var(--shadow); }
+  .edge-card.cond { border-left-color: var(--critical); }
+  .edge-card h3 { margin: 0 0 4px; font-size: 17px; }
+  .legs { font-family: var(--mono); font-size: 12px; color: var(--ink-2); margin-top: 12px; line-height: 1.75; }
+  .caution { margin-top: 12px; font-size: 13px; padding: 9px 12px; border-radius: 8px; background: var(--plane); border: 1px solid var(--axis); color: var(--ink-2); }
+  .caution.hot { border-color: var(--critical); }
+
+  /* --- States ----------------------------------------------------------- */
+  .quiet {
+    background: var(--surface); border: 1px dashed var(--axis); border-radius: var(--r);
+    padding: 44px 30px; text-align: center;
+  }
+  .quiet .big { font-size: 44px; line-height: 1; margin-bottom: 14px; }
+  .quiet h2 { margin: 0 0 10px; font-size: 21px; }
+  .quiet p { margin: 0 auto; max-width: 46ch; color: var(--ink-2); font-size: 15px; }
+  .skeleton { height: 92px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r); margin-bottom: 12px; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: .55 } 50% { opacity: .95 } }
   .err { border-color: var(--critical); color: var(--critical); }
 
-  table.detail { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12.5px; }
-  table.detail th, table.detail td { text-align: left; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--rule); }
-  table.detail th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
-  table.detail td.num { font-family: var(--mono); }
-  details summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-top: 8px; }
-  .scroll { overflow-x: auto; }
-  footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 12px; color: var(--muted); }
+  .notes { margin-top: 30px; font-size: 12.5px; color: var(--muted); }
+  .notes div { margin-top: 4px; }
+  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--rule); font-size: 12.5px; color: var(--muted); }
+
+  @media (max-width: 560px) {
+    .numbers { gap: 18px; }
+    .num .v { font-size: 17px; }
+    .run { margin-left: 0; width: 100%; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>kalshisportsbot <span>— your number vs the crowd's</span></h1>
-    <button class="theme-toggle" id="theme">theme</button>
-  </header>
+  <div class="masthead">
+    <span class="brand">kalshisportsbot</span>
+    <button class="icon-btn" id="theme">Theme</button>
+  </div>
+
+  <div class="hero">
+    <span class="slate-tag" id="slateTag">Loading</span>
+    <h1 id="headline">Reading the board…</h1>
+    <p class="sub" id="subhead">Pulling every open market and pricing it against the crowd.</p>
+  </div>
 
   <div class="controls">
-    <div class="field">
-      <label for="minEdge">Min net edge (pts)</label>
-      <input id="minEdge" type="number" value="3" min="0" max="50" step="0.5" />
+    <div class="seg" id="horizon" role="group" aria-label="Slate">
+      <button data-v="today" aria-pressed="true">Today</button>
+      <button data-v="24h" aria-pressed="false">Next 24h</button>
+      <button data-v="all" aria-pressed="false">Everything</button>
     </div>
-    <div class="field">
-      <label for="categories">Category</label>
-      <select id="categories">
-        <option value="">Everything</option>
-        <option value="Sports">Sports</option>
-        <option value="Economics">Economics</option>
-        <option value="Politics">Politics</option>
-        <option value="Financials">Financials</option>
-        <option value="Climate and Weather">Climate &amp; Weather</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="maxPages">Depth (pages)</label>
-      <input id="maxPages" type="number" value="6" min="1" max="12" step="1" />
-    </div>
+    <span class="ctl-label">Min edge</span>
+    <input id="minEdge" type="number" value="3" min="0" max="50" step="0.5" aria-label="Minimum edge in points" />
     <button class="run" id="run">Run the numbers</button>
   </div>
 
+  <div class="summary" id="summary"></div>
   <div id="out"></div>
 
   <footer>
-    Advisory only — this places no orders. Every edge shown is net of Kalshi's
-    taker fee. Sizing is fractional Kelly against your configured bankroll.
+    Advisory only — nothing here places a bet. Edges are net of Kalshi's trading
+    fee; stake sizes are quarter-Kelly against your configured bankroll.
+    Prediction markets are a real way to lose real money.
   </footer>
 </div>
 
 <script type="module">
 const $ = (id) => document.getElementById(id);
 const out = $("out");
+let horizon = "today";
 
-// --- Theme toggle: must beat the OS setting in both directions ------------
 const root = document.documentElement;
 $("theme").addEventListener("click", () => {
   const dark = getComputedStyle(root).getPropertyValue("--plane").trim() === "#0d0d0d";
   root.setAttribute("data-theme", dark ? "light" : "dark");
 });
 
-const pct  = (x) => `${(x * 100).toFixed(1)}%`;
-const pts  = (x) => `${(x * 100).toFixed(1)}`;
-const cents= (x) => `${Math.round(x * 100)}¢`;
-const usd  = (x) => `$${x.toFixed(2)}`;
-const esc  = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
 
-/** Confidence -> status role. Icon + label carry the meaning; color reinforces. */
-function confidenceChip(confidence) {
-  if (confidence >= 0.6) return { cls: "good",     icon: "●", label: `strong evidence ${pct(confidence)}` };
-  if (confidence >= 0.35) return { cls: "warning", icon: "◐", label: `moderate evidence ${pct(confidence)}` };
-  return { cls: "serious", icon: "○", label: `thin evidence ${pct(confidence)}` };
-}
+$("horizon").addEventListener("click", (e) => {
+  const button = e.target.closest("button[data-v]");
+  if (!button) return;
+  horizon = button.dataset.v;
+  for (const b of $("horizon").children) b.setAttribute("aria-pressed", String(b === button));
+  load();
+});
 
-function betCard(bet, index) {
-  const conf = confidenceChip(bet.confidence);
-  const meterWidth = Math.min(100, (bet.netEdge / 0.15) * 100);
+function pickCard(pick) {
+  // Meter tops out at 15 points; beyond that the bar is full and the number speaks.
+  const width = Math.max(3, Math.min(100, (pick.edgeValue / 0.15) * 100));
 
-  const flags = bet.flags.map(
-    (f) => `<span class="chip serious">⚠ ${esc(f)}</span>`,
+  const badges = pick.badges.map((b) => {
+    const isFuture = b.startsWith("Future");
+    return `<span class="chip ${isFuture ? "future" : "flag"}">${isFuture ? "◆" : "⚠"} ${esc(b)}</span>`;
+  }).join("");
+
+  const drivers = pick.drivers.map(
+    (d) => `<div><b>${esc(d.label)}</b>${esc(d.text)}</div>`,
   ).join("");
 
-  const why = bet.contributions
-    .filter((c) => c.source !== "market")
-    .map((c) => `<div><b>${esc(c.source)}</b> &middot; ${esc(c.rationale)}</div>`)
-    .join("");
-
-  const crowd = bet.contributions.find((c) => c.source === "market");
-
   return `
-  <div class="card">
-    <div class="card-head">
-      <span class="rank">${index + 1}</span>
-      <span class="pick">Buy ${bet.side.toUpperCase()} &mdash; ${esc(bet.label)}</span>
-      <span class="event">${esc(bet.eventTitle)}</span>
-      <span class="ticker">${esc(bet.ticker)}</span>
+  <article class="pick">
+    <div class="pick-top">
+      <div class="rank">${pick.rank}</div>
+      <div class="pick-title">
+        <h3>${esc(pick.headline)}</h3>
+        <div class="q">${esc(pick.matchup)}</div>
+        <div class="when">${esc(pick.resolvesLabel)}</div>
+      </div>
     </div>
 
-    <div class="row">
-      <div class="metric"><span class="v">${cents(bet.price)}</span><span class="l">price</span></div>
-      <div class="metric"><span class="v">${cents(bet.fair)}</span><span class="l">our fair</span></div>
-      <div class="metric"><span class="v">${pts(bet.netEdge)} pts</span><span class="l">edge (net of fees)</span></div>
-      <div class="metric"><span class="v">${usd(bet.evPerContract)}</span><span class="l">EV / contract</span></div>
-      <div class="metric"><span class="v">${bet.stake.contracts}</span><span class="l">contracts</span></div>
-      <div class="metric"><span class="v">${usd(bet.stake.costDollars)}</span><span class="l">stake</span></div>
-      <div class="metric"><span class="v" style="color:var(--good-text)">+${usd(bet.stake.winProfitDollars)}</span><span class="l">if right</span></div>
-      <div class="metric"><span class="v" style="color:var(--critical)">−${usd(bet.stake.lossDollars)}</span><span class="l">if wrong</span></div>
+    <div class="numbers">
+      <div class="num"><span class="v">${esc(pick.priceLabel)}</span><span class="l">Kalshi price</span></div>
+      <div class="num"><span class="v">${esc(pick.fairLabel)}</span><span class="l">Our number</span></div>
+      <div class="num edge"><span class="v">${esc(pick.edgeLabel)}</span><span class="l">Edge after fees</span></div>
     </div>
+    <div class="meter"><i style="width:${width}%"></i></div>
 
-    <div class="meter"><i style="width:${meterWidth}%"></i></div>
+    <p class="say">${esc(pick.summary)}</p>
 
     <div class="chips">
-      <span class="chip ${conf.cls}">${conf.icon} ${esc(conf.label)}</span>
-      <span class="chip">${esc(bet.americanOdds > 0 ? "+" + bet.americanOdds : bet.americanOdds)} offered vs ${esc(bet.fairAmericanOdds > 0 ? "+" + bet.fairAmericanOdds : bet.fairAmericanOdds)} fair</span>
-      ${flags}
+      <span class="chip ${pick.confidence.tier}">${pick.confidence.tier === "strong" ? "●" : pick.confidence.tier === "moderate" ? "◐" : "○"} ${esc(pick.confidence.label)}</span>
+      <span class="chip">${esc(pick.oddsLabel)}</span>
+      ${badges}
     </div>
 
-    <div class="why">
-      <div><b>crowd</b> &middot; Kalshi mid ${crowd ? cents(crowd.probability) : "n/a"} &mdash; we disagree by ${pts(Math.abs(bet.rawEdge))} pts.</div>
-      ${why}
+    <div class="ticket">
+      <div><span class="t">Suggested</span><span class="m">${esc(pick.stake.contractsLabel)} contracts</span></div>
+      <div><span class="t">Costs</span><span class="m">${esc(pick.stake.costLabel)}</span></div>
+      <div><span class="t">If right</span><span class="m win">${esc(pick.stake.winLabel)}</span></div>
+      <div><span class="t">If wrong</span><span class="m lose">${esc(pick.stake.loseLabel)}</span></div>
     </div>
-  </div>`;
+
+    <details>
+      <summary>How we got to ${esc(pick.fairLabel)}</summary>
+      <div class="drivers">${drivers}</div>
+      <div class="meta-line">${esc(pick.ticker)} · <a href="${esc(pick.kalshiUrl)}" target="_blank" rel="noopener noreferrer">find on Kalshi ↗</a></div>
+    </details>
+  </article>`;
 }
 
-function arbCard(arb) {
-  const legs = arb.legs
-    .map((l) => `&nbsp;&nbsp;${l.side.toUpperCase()} ${esc(l.label)} @ ${cents(l.price)}`)
+function edgeCard(edge) {
+  const legs = edge.legs
+    .map((l) => `&nbsp;&nbsp;${esc(l.sideLabel)} ${esc(l.label)} @ ${esc(l.priceLabel)}`)
     .join("<br>");
 
-  // Only trades whose payout doesn't depend on the legs covering every outcome
-  // may be presented as locked in. The rest are conditional bets, and saying so
-  // is the entire point.
-  const locked = !arb.requiresExhaustive;
-  const statusChip = locked
-    ? `<span class="chip good">● locked in &mdash; ${esc(arb.kind)}</span>`
-    : `<span class="chip critical">▲ conditional &mdash; not risk-free</span>`;
-
-  const fieldMetric = locked
-    ? ""
-    : `<div class="metric"><span class="v" style="color:var(--critical)">${pct(arb.breakEvenFieldProbability)}</span><span class="l">breaks even if "none" hits</span></div>`;
-
   return `
-  <div class="card arb" style="${locked ? "" : "border-left-color:var(--critical)"}">
-    <div class="card-head">
-      <span class="pick">${esc(arb.eventTitle)}</span>
-      ${statusChip}
+  <article class="edge-card ${edge.lockedIn ? "" : "cond"}">
+    <h3>${esc(edge.title)}</h3>
+    <div class="chips">
+      <span class="chip ${edge.lockedIn ? "strong" : "thin"}">${edge.lockedIn ? "● Locked in" : "▲ Conditional"}</span>
+      <span class="chip">${esc(edge.kindLabel)}</span>
     </div>
-    <div class="row">
-      <div class="metric"><span class="v">${usd(arb.costPerSet)}</span><span class="l">cost / set</span></div>
-      <div class="metric"><span class="v">${usd(arb.payoutPerSet)}</span><span class="l">${locked ? "guaranteed payout" : "payout if a leg wins"}</span></div>
-      <div class="metric"><span class="v" style="color:var(--good-text)">+${pct(arb.returnOnCost)}</span><span class="l">return on cost</span></div>
-      ${fieldMetric}
-      <div class="metric"><span class="v">${arb.legs.length}</span><span class="l">legs</span></div>
+    <div class="numbers">
+      <div class="num"><span class="v">${esc(edge.costLabel)}</span><span class="l">Cost per set</span></div>
+      <div class="num"><span class="v">${esc(edge.payoutLabel)}</span><span class="l">${edge.lockedIn ? "Guaranteed back" : "Back if a leg wins"}</span></div>
+      <div class="num edge"><span class="v">${esc(edge.returnLabel)}</span><span class="l">Return</span></div>
+      ${edge.breakEvenLabel ? `<div class="num"><span class="v" style="color:var(--critical)">${esc(edge.breakEvenLabel)}</span><span class="l">Break-even "none"</span></div>` : ""}
     </div>
     <div class="legs">${legs}</div>
-    <div class="chips"><span class="chip ${locked ? "warning" : "critical"}">⚠ ${esc(arb.note)}</span></div>
-  </div>`;
+    <div class="caution ${edge.lockedIn ? "" : "hot"}">${esc(edge.caution)}</div>
+  </article>`;
 }
 
-function render(data) {
-  const s = data.stats;
-  const tiles = [
-    [s.marketsScanned.toLocaleString(), "markets scanned"],
-    [s.marketsTradeable.toLocaleString(), "tradeable"],
-    [s.marketsWithSignal.toLocaleString(), "with a signal"],
-    [s.consensusMatched.toLocaleString(), "matched to books"],
-    [data.bets.length, "bets found"],
-    [data.arbitrage.length, "structural edges"],
-  ].map(([n, k]) => `<div class="tile"><div class="n">${n}</div><div class="k">${k}</div></div>`).join("");
+function render(board) {
+  $("slateTag").textContent = `${board.meta.slateLabel} · ${board.meta.tzAbbrev}`;
+  $("headline").textContent = board.headline.title;
+  $("subhead").textContent = board.headline.subtitle;
+  $("summary").innerHTML = board.summary
+    .map((s) => `<span>${esc(s.label)} <b>${esc(s.value)}</b></span>`)
+    .join("");
 
-  const arbSection = data.arbitrage.length
-    ? `<h2>Structural edges <span class="sub">— price arithmetic; check each card for whether the payout is locked in or conditional</span></h2>
-       ${data.arbitrage.map(arbCard).join("")}`
-    : "";
+  const parts = [];
 
-  const betSection = data.bets.length
-    ? `<h2>Best bets <span class="sub">— ranked by edge, discounted for weak evidence and thin books</span></h2>
-       ${data.bets.map(betCard).join("")}`
-    : `<h2>Best bets</h2>
-       <div class="empty">
-         <strong>Nothing clears the bar right now.</strong>
-         This is a real answer, not a failure. An efficient board means the
-         correct play is to pass — forcing a bet here is exactly the habit
-         that makes Kalshi profitable for everyone but you.
-       </div>`;
+  if (board.lockedIn.length) {
+    parts.push(`<div class="section-head"><h2>Locked in</h2><span class="count">payout doesn't depend on who wins</span></div>`);
+    parts.push(board.lockedIn.map(edgeCard).join(""));
+  }
 
-  const notes = data.notes.length
-    ? `<div class="notes">${data.notes.map((n) => `<div>· ${esc(n)}</div>`).join("")}</div>`
-    : "";
+  for (const section of board.sections) {
+    parts.push(
+      `<div class="section-head"><h2>${esc(section.title)}</h2><span class="count">${section.picks.length} pick${section.picks.length === 1 ? "" : "s"}</span></div>`,
+    );
+    parts.push(section.picks.map(pickCard).join(""));
+  }
 
-  out.innerHTML = `
-    <div class="tiles">${tiles}</div>
-    ${arbSection}
-    ${betSection}
-    ${notes}
-    <div class="notes"><div>Scanned in ${(data.durationMs / 1000).toFixed(1)}s &middot;
-    ${new Date(data.generatedAt).toLocaleTimeString()} &middot; bankroll ${usd(data.bankroll)}</div></div>`;
+  if (!board.sections.length && !board.lockedIn.length) {
+    parts.push(`
+      <div class="quiet">
+        <div class="big">☕</div>
+        <h2>${esc(board.headline.title)}</h2>
+        <p>${esc(board.headline.subtitle)}</p>
+      </div>`);
+  }
+
+  if (board.conditional.length) {
+    parts.push(`<div class="section-head"><h2>Conditional edges</h2><span class="count">check these yourself before acting</span></div>`);
+    parts.push(board.conditional.map(edgeCard).join(""));
+  }
+
+  if (board.notes.length) {
+    parts.push(`<div class="notes">${board.notes.map((n) => `<div>· ${esc(n)}</div>`).join("")}</div>`);
+  }
+  parts.push(`<div class="notes"><div>Scanned in ${esc(board.meta.durationLabel)} at ${esc(board.meta.generatedLabel)} · bankroll ${esc(board.meta.bankrollLabel)}</div></div>`);
+
+  out.innerHTML = parts.join("");
 }
 
-async function run() {
+async function load() {
   const button = $("run");
   button.disabled = true;
   button.textContent = "Running…";
-  out.innerHTML = `<div class="empty">Pulling live markets and running the numbers…</div>`;
+  out.innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
 
-  const params = new URLSearchParams({
-    minEdge: $("minEdge").value,
-    maxPages: $("maxPages").value,
-  });
-  if ($("categories").value) params.set("categories", $("categories").value);
+  const params = new URLSearchParams({ horizon, minEdge: $("minEdge").value });
 
   try {
-    const response = await fetch(`/api/scan?${params}`);
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
-    render(data);
+    const response = await fetch(`/api/board?${params}`);
+    const board = await response.json();
+    if (board.error) throw new Error(board.error);
+    render(board);
   } catch (err) {
-    out.innerHTML = `<div class="empty err"><strong>Scan failed</strong>${esc(err.message)}</div>`;
+    out.innerHTML = `<div class="quiet err"><h2>Couldn't reach the board</h2><p>${esc(err.message)}</p></div>`;
   } finally {
     button.disabled = false;
     button.textContent = "Run the numbers";
   }
 }
 
-$("run").addEventListener("click", run);
-run();
+$("run").addEventListener("click", load);
+load();
 </script>
 </body>
 </html>

@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { config } from "./config.js";
 import { runScan, type ScanOptions } from "./engine/scan.js";
+import { presentBoard } from "./engine/present.js";
 
 const WEB_DIR = resolve(process.cwd(), "web");
 
@@ -46,19 +47,35 @@ const server = createServer(async (req, res) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "no-referrer");
 
-  if (url.pathname === "/api/scan") {
+  /** Shared query parsing for both the raw and presented endpoints. */
+  const readOptions = (): ScanOptions => {
     const options: ScanOptions = {};
     const minEdge = url.searchParams.get("minEdge");
     if (minEdge) options.minEdge = Number(minEdge) / 100;
     const categories = url.searchParams.get("categories");
     if (categories) options.categories = categories.split(",").filter(Boolean);
-    const maxPages = url.searchParams.get("maxPages");
-    if (maxPages) options.maxPages = Math.min(12, Math.max(1, Number(maxPages)));
 
+    const horizon = url.searchParams.get("horizon");
+    if (horizon === "today" || horizon === "24h" || horizon === "all") {
+      options.horizon = horizon;
+    }
+    const screaming = url.searchParams.get("screamingEdge");
+    if (screaming) options.screamingEdge = Number(screaming) / 100;
+    if (url.searchParams.get("futures") === "off") {
+      options.includeScreamingFutures = false;
+    }
+    return options;
+  };
+
+  // `/api/board` is what the website consumes: pre-formatted, presentation
+  // shaped. `/api/scan` returns the raw engine output for debugging and for
+  // anything else that wants to do its own maths.
+  if (url.pathname === "/api/board" || url.pathname === "/api/scan") {
     try {
-      const result = await runScan(options);
+      const result = await runScan(readOptions());
+      const body = url.pathname === "/api/board" ? presentBoard(result) : result;
       res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
-      res.end(JSON.stringify(result));
+      res.end(JSON.stringify(body));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.writeHead(502, { "Content-Type": "application/json" });

@@ -1,6 +1,14 @@
 import { config } from "../config.js";
 import { fetchOpenEvents } from "../kalshi/client.js";
-import { isTradeable, normalizeMarket, type MarketView } from "../core/market.js";
+import { slateWindow, type Horizon } from "../core/time.js";
+import type { KalshiEvent } from "../kalshi/types.js";
+import {
+  isMultivariate,
+  isTradeable,
+  normalizeMarket,
+  resolvesWithin,
+  type MarketView,
+} from "../core/market.js";
 import { evPerContract, marginalFeeRate, round2, sizeStake, toAmericanOdds, type Stake } from "../core/money.js";
 import { buildConsensus } from "../signals/consensus.js";
 import { readMicrostructure, stalePriceEstimate } from "../signals/microstructure.js";
@@ -37,6 +45,12 @@ export interface BetRecommendation {
   score: number;
   flags: string[];
   contributions: FusedEstimate["contributions"];
+
+  /**
+   * Whether this resolves on the current slate or is a longer-dated market that
+   * cleared the much higher "screaming" bar to appear at all.
+   */
+  horizonKind: "day-of" | "future";
 }
 
 export interface ScanResult {
@@ -50,19 +64,37 @@ export interface ScanResult {
     marketsTradeable: number;
     marketsWithSignal: number;
     consensusMatched: number;
+    futuresPromoted: number;
   };
   notes: string[];
   bankroll: number;
+  slate: {
+    horizon: Horizon;
+    label: string;
+    startMs: number;
+    endMs: number;
+    timezone: string;
+    screamingEdge: number;
+  };
 }
 
 export interface ScanOptions {
-  /** Cap pages of events fetched; each page is up to 200 events. */
+  /** Cap pages fetched; each page is up to 200 items. */
   maxPages?: number;
   /** Override the configured minimum net edge. */
   minEdge?: number;
   /** Only scan these categories (case-insensitive), e.g. ["Sports"]. */
   categories?: string[];
   maxResults?: number;
+  /** Which slate to scan. Defaults to "today". */
+  horizon?: Horizon;
+  /**
+   * Also surface longer-dated markets, but only ones clearing `screamingEdge`.
+   * On by default: the point of a day-of board is focus, not blindness.
+   */
+  includeScreamingFutures?: boolean;
+  /** Edge a future must clear to interrupt the day-of board. */
+  screamingEdge?: number;
 }
 
 /**
@@ -78,6 +110,7 @@ function evaluateSide(
   side: "yes" | "no",
   fused: FusedEstimate,
   now: number,
+  horizonKind: "day-of" | "future",
 ): BetRecommendation | null {
   const price = side === "yes" ? market.yesAsk : market.noAsk;
   if (!(price > 0 && price < 1)) return null;
@@ -123,27 +156,27 @@ function evaluateSide(
     score,
     flags: micro.flags,
     contributions: fused.contributions,
+    horizonKind,
   };
 }
 
 /**
- * Run a full scan: pull live markets, gather every signal, blend, rank.
+ * Turn a batch of events into tradeable markets plus their structural signals.
  *
- * The order matters — consensus is fetched in one batch across all candidate
- * markets rather than per-market, because the Odds API bills per request and
- * per-market fetching would exhaust a month's quota in a single scan.
+ * Shared by the day-of pass and the futures sweep so both get identical
+ * treatment — only the edge bar applied afterwards differs.
  */
-export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
-  const startedAt = Date.now();
-  const notes: string[] = [];
-  const minEdge = options.minEdge ?? config.minEdge;
-
-  const events = await fetchOpenEvents({ maxPages: options.maxPages ?? 6 });
-
-  const categoryFilter = options.categories?.map((c) => c.toLowerCase());
-
-  // --- Normalize, and collect structural signals per event ------------------
-  const allMarkets: MarketView[] = [];
+function collectFromEvents(
+  events: KalshiEvent[],
+  now: number,
+  categoryFilter: string[] | undefined,
+): {
+  markets: MarketView[];
+  structural: Map<string, ProbabilityEstimate>;
+  arbitrage: ArbOpportunity[];
+  marketsScanned: number;
+} {
+  const markets: MarketView[] = [];
   const structural = new Map<string, ProbabilityEstimate>();
   const arbitrage: ArbOpportunity[] = [];
   let marketsScanned = 0;
@@ -156,10 +189,12 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
       continue;
     }
 
-    const views = (event.markets ?? []).map((m) => normalizeMarket(m, event));
+    const views = (event.markets ?? [])
+      .filter((m) => !isMultivariate(m))
+      .map((m) => normalizeMarket(m, event));
     marketsScanned += views.length;
 
-    const tradeable = views.filter((v) => isTradeable(v, startedAt));
+    const tradeable = views.filter((v) => isTradeable(v, now));
     if (tradeable.length === 0) continue;
 
     arbitrage.push(
@@ -177,8 +212,56 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
       }
     }
 
-    allMarkets.push(...tradeable);
+    markets.push(...tradeable);
   }
+
+  return { markets, structural, arbitrage, marketsScanned };
+}
+
+
+/**
+ * Run a full scan: pull live markets, gather every signal, blend, rank.
+ *
+ * The order matters — consensus is fetched in one batch across all candidate
+ * markets rather than per-market, because the Odds API bills per request and
+ * per-market fetching would exhaust a month's quota in a single scan.
+ */
+export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
+  const startedAt = Date.now();
+  const notes: string[] = [];
+  const minEdge = options.minEdge ?? config.minEdge;
+  const horizon = options.horizon ?? "today";
+  const screamingEdge = options.screamingEdge ?? config.screamingEdge;
+  const includeFutures = options.includeScreamingFutures ?? true;
+  // Default high enough to walk the entire board — see `fetchOpenEvents` for
+  // why a truncated sweep silently loses today's sports.
+  const maxPages = options.maxPages ?? 60;
+
+  const window = slateWindow(horizon, config.timezone, new Date(startedAt));
+  const categoryFilter = options.categories?.map((c) => c.toLowerCase());
+
+  // --- The board ------------------------------------------------------------
+  // One sweep of every open event, then split by resolution time. Kalshi's
+  // cursor order is unrelated to when things resolve, so the whole board has to
+  // be in hand before "today" means anything.
+  const events = await fetchOpenEvents({ maxPages });
+  const collected = collectFromEvents(events, startedAt, categoryFilter);
+
+  const onSlate = (market: MarketView): boolean =>
+    horizon === "all" || resolvesWithin(market, window.startMs, window.endMs);
+
+  const slateTickers = new Set(
+    collected.markets.filter(onSlate).map((m) => m.ticker),
+  );
+
+  // A day-of board that silently ignores a 20-point edge two weeks out would be
+  // worse than useless, so longer-dated markets are still evaluated — they just
+  // have to be loud enough to justify interrupting today's board.
+  const allMarkets = includeFutures
+    ? collected.markets
+    : collected.markets.filter(onSlate);
+
+  const structural = collected.structural;
 
   // --- Cross-book consensus, batched ---------------------------------------
   const { estimates: consensus, notes: consensusNotes } = await buildConsensus(allMarkets);
@@ -187,6 +270,7 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
   // --- Fuse and rank --------------------------------------------------------
   const bets: BetRecommendation[] = [];
   let marketsWithSignal = 0;
+  let futuresPromoted = 0;
 
   for (const market of allMarkets) {
     const estimates: ProbabilityEstimate[] = [];
@@ -209,15 +293,48 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
     const fused = fuse(market, estimates);
     if (!fused.hasIndependentSignal || !Number.isFinite(fused.fair)) continue;
 
+    const isSlate = slateTickers.has(market.ticker);
+    const bar = isSlate ? minEdge : Math.max(minEdge, screamingEdge);
+
     for (const side of ["yes", "no"] as const) {
-      const bet = evaluateSide(market, side, fused, startedAt);
-      if (bet && bet.netEdge >= minEdge) bets.push(bet);
+      const bet = evaluateSide(
+        market,
+        side,
+        fused,
+        startedAt,
+        isSlate ? "day-of" : "future",
+      );
+      if (!bet || bet.netEdge < bar) continue;
+      if (!isSlate) futuresPromoted++;
+      bets.push(bet);
     }
   }
 
-  bets.sort((a, b) => b.score - a.score);
-  arbitrage.sort((a, b) => b.returnOnCost - a.returnOnCost);
+  // Day-of first: a future has to be genuinely exceptional to be here at all,
+  // but today's board is still the point of the page.
+  bets.sort((a, b) => {
+    if (a.horizonKind !== b.horizonKind) return a.horizonKind === "day-of" ? -1 : 1;
+    return b.score - a.score;
+  });
 
+  // Structural edges only count on the slate — a locked-in 2% return isn't
+  // worth tying up capital until 2028.
+  const arbitrage = collected.arbitrage
+    .filter((a) => slateTickers.has(a.legs[0]?.ticker ?? ""))
+    .sort((a, b) => b.returnOnCost - a.returnOnCost);
+
+  if (horizon !== "all") {
+    notes.push(
+      `Slate: ${window.label} — markets closing before ` +
+        `${new Date(window.endMs).toLocaleString("en-US", { timeZone: config.timezone })}.`,
+    );
+  }
+  if (includeFutures && horizon !== "all") {
+    notes.push(
+      `Longer-dated markets included only above ${(screamingEdge * 100).toFixed(0)} points of net edge` +
+        (futuresPromoted > 0 ? ` — ${futuresPromoted} cleared it.` : " — none cleared it."),
+    );
+  }
   if (bets.length === 0 && marketsWithSignal > 0) {
     notes.push(
       `No market cleared the ${(minEdge * 100).toFixed(1)}-point net-edge bar. ` +
@@ -232,13 +349,22 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
     arbitrage: arbitrage.slice(0, 20),
     stats: {
       eventsScanned: events.length,
-      marketsScanned,
-      marketsTradeable: allMarkets.length,
+      marketsScanned: collected.marketsScanned,
+      marketsTradeable: slateTickers.size,
       marketsWithSignal,
       consensusMatched: consensus.size,
+      futuresPromoted,
     },
     notes,
     bankroll: config.bankroll,
+    slate: {
+      horizon,
+      label: window.label,
+      startMs: window.startMs,
+      endMs: window.endMs,
+      timezone: config.timezone,
+      screamingEdge,
+    },
   };
 }
 

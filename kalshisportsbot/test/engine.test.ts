@@ -9,7 +9,13 @@ import {
   sizeStake,
   takerFee,
 } from "../src/core/money.js";
-import type { MarketView } from "../src/core/market.js";
+import {
+  isMultivariate,
+  normalizeMarket,
+  resolvesWithin,
+  type MarketView,
+} from "../src/core/market.js";
+import { slateWindow } from "../src/core/time.js";
 import { fuse } from "../src/engine/fuse.js";
 import { devig } from "../src/signals/consensus.js";
 import { findArbitrage, normalizeExclusiveSet } from "../src/signals/structural.js";
@@ -28,6 +34,7 @@ function market(overrides: Partial<MarketView> = {}): MarketView {
     eventTitle: "Test event",
     category: "Test",
     closeTime: Date.now() + 86_400_000,
+    resolutionTime: Date.now() + 86_400_000,
     updatedTime: Date.now(),
     yesBid,
     yesAsk,
@@ -239,6 +246,85 @@ test("renormalization strips the overround on a covered set", () => {
   const first = estimates.get("L0")!;
   assert.ok(Math.abs(first.probability - 0.25) < 1e-6);
   assert.ok(first.probability < 0.27, "renormalized price must sit below the raw mid");
+});
+
+// --- Slate windows -----------------------------------------------------------
+
+test("REGRESSION: sports markets are slated by resolution, not close time", () => {
+  // A tennis match tonight carries a close_time ~15 days out (Kalshi's
+  // settlement backstop) and an expected_expiration_time of tonight. Slating on
+  // close time would classify every sports market as a future and leave the
+  // day-of board permanently empty.
+  const match = normalizeMarket({
+    ticker: "KXATPMATCH-26JUL31FRIMIC-FRI",
+    event_ticker: "KXATPMATCH-26JUL31FRIMIC",
+    market_type: "binary",
+    title: "Match winner",
+    yes_sub_title: "Fritz",
+    no_sub_title: "Michelsen",
+    status: "active",
+    open_time: "2026-07-29T00:00:00Z",
+    close_time: "2026-08-14T15:00:00Z",
+    expected_expiration_time: "2026-07-30T23:00:00Z",
+    yes_bid_dollars: "0.4000",
+    yes_ask_dollars: "0.4200",
+    no_bid_dollars: "0.5800",
+    no_ask_dollars: "0.6000",
+    last_price_dollars: "0.4100",
+  });
+
+  const start = Date.parse("2026-07-30T16:00:00Z");
+  const end = Date.parse("2026-07-31T04:00:00Z");
+
+  assert.equal(match.resolutionTime, Date.parse("2026-07-30T23:00:00Z"));
+  assert.ok(match.closeTime > end, "close time is well outside the slate");
+  assert.equal(resolvesWithin(match, start, end), true, "must land on today's slate");
+});
+
+test("markets falling back to close time still slate correctly", () => {
+  // Crypto and index markets have no separate expiration — close is resolution.
+  const crypto = normalizeMarket({
+    ticker: "KXBTCD-26JUL3017-T50",
+    event_ticker: "KXBTCD-26JUL3017",
+    market_type: "binary",
+    title: "BTC above 50k",
+    yes_sub_title: "Above",
+    no_sub_title: "Below",
+    status: "active",
+    open_time: "2026-07-30T00:00:00Z",
+    close_time: "2026-07-30T21:00:00Z",
+    yes_bid_dollars: "0.4000",
+    yes_ask_dollars: "0.4200",
+    no_bid_dollars: "0.5800",
+    no_ask_dollars: "0.6000",
+    last_price_dollars: "0.4100",
+  });
+  assert.equal(crypto.resolutionTime, crypto.closeTime);
+  assert.equal(
+    resolvesWithin(crypto, Date.parse("2026-07-30T16:00:00Z"), Date.parse("2026-07-31T04:00:00Z")),
+    true,
+  );
+});
+
+test("today's window ends at local midnight, not 24 hours out", () => {
+  const now = new Date("2026-07-30T16:00:00Z"); // 12pm ET
+  const w = slateWindow("today", "America/New_York", now);
+  assert.equal(w.label, "today");
+  // Midnight ET = 04:00Z next day.
+  assert.equal(new Date(w.endMs).toISOString(), "2026-07-31T04:00:00.000Z");
+  assert.ok(w.endMs - w.startMs < 86_400_000);
+});
+
+test("a nearly-over day rolls forward to tomorrow's board", () => {
+  const now = new Date("2026-07-31T03:30:00Z"); // 11:30pm ET
+  const w = slateWindow("today", "America/New_York", now);
+  assert.match(w.label, /tomorrow/);
+  assert.equal(new Date(w.endMs).toISOString(), "2026-08-01T04:00:00.000Z");
+});
+
+test("parlay markets are excluded from scanning", () => {
+  assert.equal(isMultivariate({ mve_collection_ticker: "KXMVE-R" } as never), true);
+  assert.equal(isMultivariate({ ticker: "KXMLBGAME-X" } as never), false);
 });
 
 // --- End to end --------------------------------------------------------------

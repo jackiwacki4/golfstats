@@ -13,6 +13,10 @@ mispriced and why, sizes the position, and leaves the trade to you.
 Kalshi is fluid, so this is built to be re-run rather than scheduled: open the
 page, hit **Run the numbers**, and see the board as it stands right now.
 
+It defaults to **today's slate only** — markets that resolve before local
+midnight. Futures are still scanned but have to clear a much higher bar
+(10 points of net edge, vs 3) to interrupt the board.
+
 The design goal is to *not* let the crowd steer the decision. A bot that reads
 the Kalshi price and hands it back with confident framing is just the crowd's
 opinion with extra steps — that's the predatory version. So the market price
@@ -37,8 +41,38 @@ password. `npm run scan` prints the same results in the terminal.
 
 ```sh
 npm run scan -- --min-edge 2 --categories Sports --limit 10
-npm test                 # 20 tests over the fee, sizing, and arbitrage math
+npm run scan -- --horizon 24h            # today | 24h | all
+npm run scan -- --no-futures             # day-of only, no exceptions
+npm run scan -- --screaming-edge 15      # raise the bar futures must clear
+npm test                                 # 25 tests over the math
 ```
+
+## Today's slate, and the one timestamp that matters
+
+The day-of filter looks harmless and contains the single nastiest trap in the
+Kalshi API. A market has **two** end timestamps and they are not
+interchangeable:
+
+- `close_time` — the trading deadline. For sports this is a *settlement
+  backstop*, often days or weeks out. A tennis match tonight can carry a
+  `close_time` fifteen days away.
+- `expected_expiration_time` — when it actually resolves. That's tonight.
+
+Slate on `close_time` and every sports market looks like a future, leaving a
+day-of sports board permanently and silently empty. This tool slates on
+`expected_expiration_time`, falling back to `close_time` for markets like crypto
+and index strikes where the two coincide. There's a regression test pinning it.
+
+A related trap: Kalshi's cursor order has nothing to do with resolution time, so
+a truncated sweep isn't a smaller board, it's an arbitrary one. Fetching six
+pages returns 1,200 events containing **zero** of today's sports. The scanner
+walks the whole board — roughly 9,400 events and 77,000 markets, about 11
+seconds — then filters. Results are cached in memory for 90 seconds so a second
+click is instant.
+
+Multivariate parlay markets (`mve_collection_ticker`) are excluded: their prices
+are functions of legs already evaluated individually, so any edge there is the
+same edge double-counted.
 
 ## Where the edge comes from
 
@@ -156,6 +190,29 @@ The server **refuses to start** if bound to a non-loopback address without
 `DASHBOARD_PASSWORD` set, so it can't be exposed unauthenticated by accident.
 Password comparison is constant-time; the page is `noindex` and un-framable.
 
+## The website, and how the bot feeds it
+
+The page does no arithmetic and makes no judgement calls. The engine decides
+what's true, `src/engine/present.ts` decides how it reads, and the page lays out
+what it's handed. That split is what stops a redesign from quietly changing what
+counts as a bet.
+
+Two endpoints:
+
+| Endpoint | Shape | For |
+|---|---|---|
+| `GET /api/board` | `Board` — grouped into sections, every number pre-formatted as a string, plain-English summaries, confidence tiers | the website |
+| `GET /api/scan` | raw `ScanResult` — probabilities, weights, internals | debugging, or anything doing its own maths |
+
+Query params (both): `horizon=today|24h|all`, `minEdge=3` (points),
+`screamingEdge=10`, `futures=off`, `categories=Sports,Economics`.
+
+`Board` carries presentation-ready fields — `priceLabel: "42¢"`,
+`edgeLabel: "+7.5 pts"`, `confidence: { tier: "strong", label: … }`,
+`summary: "Kalshi is asking 42¢; we make it 51¢…"` — alongside raw values where
+sorting or meters need them. Adding a second front-end (a phone app, a
+different layout) means consuming `/api/board` and nothing else.
+
 ## Layout
 
 ```
@@ -164,7 +221,8 @@ src/
   kalshi/client.ts       API client, pagination, retry, request signing
   kalshi/types.ts        2026 API shapes (dollar-denominated strings)
   core/money.ts          fees, EV, Kelly, sizing        <- the math that matters
-  core/market.ts         normalization
+  core/market.ts         normalization, resolution time, parlay detection
+  core/time.ts           slate windows in a real timezone
   core/cache.ts          disk cache with TTL
   signals/structural.ts  arbitrage + overround stripping
   signals/consensus.ts   sportsbook de-vig + matching
@@ -172,9 +230,10 @@ src/
   signals/models.ts      your models
   engine/fuse.ts         log-odds blending
   engine/scan.ts         orchestration + ranking
-  server.ts / cli.ts     dashboard + terminal
-web/index.html           the dashboard
-test/engine.test.ts      20 tests
+  engine/present.ts      view model the website renders
+  server.ts / cli.ts     site + terminal
+web/index.html           the website
+test/engine.test.ts      25 tests
 ```
 
 ## Limitations worth knowing
@@ -190,6 +249,9 @@ test/engine.test.ts      20 tests
   doesn't fix a bad model.
 - **Depth comes from the nested payload**, so the top-of-book size is a snapshot.
   Confirm the book before sending anything large.
+- **The futures bar is a guess, not a calibration.** 10 points is set so that
+  only something genuinely loud interrupts today's board. It has no backtest
+  behind it — tune `SCREAMING_EDGE` to taste.
 - **No results tracking yet.** The obvious next step: log every recommendation
   and settle it later, so signal weights can be set by measured calibration
   instead of by the judgement calls in `SOURCE_WEIGHTS`.

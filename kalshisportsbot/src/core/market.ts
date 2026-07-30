@@ -16,7 +16,18 @@ export interface MarketView {
   yesLabel: string;
   eventTitle: string;
   category: string;
+  /** Kalshi's trading deadline. For sports this is a settlement backstop, not game time. */
   closeTime: number;
+  /**
+   * When this actually resolves — what "day of" means.
+   *
+   * These are not the same field and conflating them breaks the day-of board
+   * outright. A tennis match tonight carries a `close_time` fifteen days out
+   * (Kalshi's settlement deadline) and an `expected_expiration_time` of
+   * tonight. Filter a slate on close time and every sports market on the board
+   * looks like a future.
+   */
+  resolutionTime: number;
   updatedTime: number;
 
   yesBid: number;
@@ -62,6 +73,7 @@ export function normalizeMarket(market: KalshiMarket, event?: KalshiEvent): Mark
     eventTitle: event?.title ?? market.title,
     category: event?.category ?? "",
     closeTime: time(market.close_time),
+    resolutionTime: time(market.expected_expiration_time) || time(market.close_time),
     updatedTime: time(market.updated_time),
 
     yesBid,
@@ -81,7 +93,7 @@ export function normalizeMarket(market: KalshiMarket, event?: KalshiEvent): Mark
   };
 }
 
-/** Markets worth scanning: actually tradeable, two-sided, and not yet closing. */
+/** Markets worth scanning: actually tradeable, two-sided, and not yet resolved. */
 export function isTradeable(view: MarketView, now = Date.now()): boolean {
   return (
     Number.isFinite(view.yesAsk) &&
@@ -89,6 +101,29 @@ export function isTradeable(view: MarketView, now = Date.now()): boolean {
     view.yesAsk > 0 &&
     view.yesAsk < 1 &&
     view.yesBid > 0 &&
-    view.closeTime > now
+    view.resolutionTime > now
+  );
+}
+
+/** True when this market resolves inside the slate window. */
+export function resolvesWithin(
+  view: MarketView,
+  startMs: number,
+  endMs: number,
+): boolean {
+  return view.resolutionTime > startMs && view.resolutionTime <= endMs;
+}
+
+/**
+ * Multivariate "parlay" markets — Kalshi's combinations of other contracts.
+ *
+ * Excluded from scanning. Their price is a function of legs we already evaluate
+ * individually, so any edge found here is the same edge counted twice, and the
+ * signals would misread them badly: a consensus matcher seeing two team names
+ * in a fourteen-leg parlay title would confidently price the wrong thing.
+ */
+export function isMultivariate(market: KalshiMarket): boolean {
+  return Boolean(
+    (market as { mve_collection_ticker?: string }).mve_collection_ticker,
   );
 }

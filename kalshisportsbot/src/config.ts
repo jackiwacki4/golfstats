@@ -54,6 +54,15 @@ export const config = {
   bankroll: num("BANKROLL_DOLLARS", 1000),
   kellyFraction: num("KELLY_FRACTION", 0.25),
   minEdge: num("MIN_EDGE", 0.03),
+
+  /** Timezone that defines "today" for the day-of slate. */
+  timezone: str("TIMEZONE", "America/New_York"),
+  /**
+   * Edge a longer-dated market must clear to earn a place on a day-of board.
+   * Deliberately high — the whole point of the day-of filter is that futures
+   * only interrupt when the number is impossible to ignore.
+   */
+  screamingEdge: num("SCREAMING_EDGE", 0.1),
 } as const;
 
 /** True when Kalshi credentials are present; unlocks authenticated endpoints. */

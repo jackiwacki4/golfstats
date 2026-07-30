@@ -13,15 +13,26 @@ const cents = (x: number) => `${(x * 100).toFixed(0)}c`;
 
 const minEdgeArg = flag("min-edge");
 const categoriesArg = flag("categories");
+const horizonArg = flag("horizon");
+const screamingArg = flag("screaming-edge");
+
+const horizon =
+  horizonArg === "24h" || horizonArg === "all" || horizonArg === "today"
+    ? horizonArg
+    : undefined;
 
 const result = await runScan({
   minEdge: minEdgeArg ? Number(minEdgeArg) / 100 : undefined,
   categories: categoriesArg?.split(","),
   maxResults: Number(flag("limit") ?? 15),
+  horizon,
+  screamingEdge: screamingArg ? Number(screamingArg) / 100 : undefined,
+  includeScreamingFutures: !args.includes("--no-futures"),
 });
 
 console.log(
-  `\nScanned ${result.stats.marketsScanned} markets across ${result.stats.eventsScanned} events ` +
+  `\nSlate: ${result.slate.label} — ${result.stats.marketsTradeable} markets resolving in window.\n` +
+    `Scanned ${result.stats.marketsScanned} markets across ${result.stats.eventsScanned} events ` +
     `in ${(result.durationMs / 1000).toFixed(1)}s — ` +
     `${result.stats.marketsWithSignal} had an independent signal.\n`,
 );
@@ -46,8 +57,9 @@ if (result.bets.length === 0) {
 } else {
   console.log(`TOP ${result.bets.length} BETS`);
   for (const [index, bet] of result.bets.entries()) {
+    const tag = bet.horizonKind === "future" ? " [FUTURE]" : "";
     console.log(
-      `\n ${index + 1}. ${bet.label} — ${bet.eventTitle.slice(0, 64)}\n` +
+      `\n ${index + 1}. ${bet.label}${tag} — ${bet.eventTitle.slice(0, 64)}\n` +
         `    buy ${bet.side.toUpperCase()} @ ${cents(bet.price)}  fair ${cents(bet.fair)}  ` +
         `net edge ${pct(bet.netEdge)}  conf ${pct(bet.confidence)}\n` +
         `    stake ${bet.stake.contracts} contracts ($${bet.stake.costDollars.toFixed(2)}) ` +
