@@ -10,6 +10,7 @@ import {
   takerFee,
 } from "../src/core/money.js";
 import {
+  hasReliableMid,
   isMultivariate,
   normalizeMarket,
   resolvesWithin,
@@ -17,7 +18,9 @@ import {
 } from "../src/core/market.js";
 import { slateWindow } from "../src/core/time.js";
 import { fuse } from "../src/engine/fuse.js";
-import { devig, splitMatchup, teamsMatch } from "../src/signals/consensus.js";
+import { devig, devigPower, splitMatchup, teamsMatch } from "../src/signals/consensus.js";
+import { shrinkTowardMarket } from "../src/core/inference.js";
+import { planExecution } from "../src/core/execution.js";
 import { findArbitrage, normalizeExclusiveSet } from "../src/signals/structural.js";
 import type { ProbabilityEstimate } from "../src/signals/types.js";
 
@@ -383,6 +386,123 @@ test("a nearly-over day rolls forward to tomorrow's board", () => {
 test("parlay markets are excluded from scanning", () => {
   assert.equal(isMultivariate({ mve_collection_ticker: "KXMVE-R" } as never), true);
   assert.equal(isMultivariate({ ticker: "KXMLBGAME-X" } as never), false);
+});
+
+// --- Shrinkage ---------------------------------------------------------------
+
+test("a modest well-evidenced disagreement mostly survives", () => {
+  const r = shrinkTowardMarket({ fair: 0.48, marketMid: 0.44, confidence: 0.85, quality: 0.9 });
+  assert.ok(r.factor > 0.4, `expected most of the edge to survive, kept ${r.factor}`);
+  assert.ok(r.fair > 0.44 && r.fair < 0.48);
+  assert.equal(r.implausible, false);
+});
+
+test("the same gap on weak evidence is shrunk much harder", () => {
+  const strong = shrinkTowardMarket({ fair: 0.48, marketMid: 0.44, confidence: 0.85, quality: 0.9 });
+  const weak = shrinkTowardMarket({ fair: 0.48, marketMid: 0.44, confidence: 0.1, quality: 0.2 });
+  assert.ok(weak.factor < strong.factor / 2, "weak evidence must be discounted far more");
+  assert.ok(weak.shrunkGap < 0.015, "a weakly-evidenced 4pt gap should nearly vanish");
+});
+
+test("REGRESSION: an implausible gap does not become an enormous edge", () => {
+  // A 30-point disagreement is a defect — a mismatched game, a stale line, or
+  // two venues pricing different questions. Kelly scales with edge, so left
+  // unshrunk this is precisely the bet the bot would stake hardest on.
+  const r = shrinkTowardMarket({ fair: 0.75, marketMid: 0.45, confidence: 0.8, quality: 0.8 });
+  assert.equal(r.implausible, true);
+  assert.ok(r.shrunkGap < 0.06, `30pt gap survived as ${r.shrunkGap}, far too much`);
+
+  // And it must end up worth *less* than an honest, well-evidenced 5pt edge —
+  // past a point, a wider disagreement is evidence of a bug, not of profit.
+  const honest = shrinkTowardMarket({ fair: 0.49, marketMid: 0.44, confidence: 0.9, quality: 0.9 });
+  assert.ok(
+    r.shrunkGap < honest.shrunkGap,
+    `suspect gap survived as ${r.shrunkGap} vs credible ${honest.shrunkGap}`,
+  );
+});
+
+test("surviving edge falls once a gap is implausibly wide", () => {
+  const at = (gap: number) =>
+    shrinkTowardMarket({ fair: 0.45 + gap, marketMid: 0.45, confidence: 0.8, quality: 0.8 })
+      .shrunkGap;
+  // Rising while the gap is credible, falling once it plainly isn't.
+  assert.ok(at(0.05) < at(0.12));
+  assert.ok(at(0.40) < at(0.20));
+});
+
+test("shrinkage is symmetric and never crosses the market price", () => {
+  const up = shrinkTowardMarket({ fair: 0.60, marketMid: 0.50, confidence: 0.6, quality: 0.6 });
+  const down = shrinkTowardMarket({ fair: 0.40, marketMid: 0.50, confidence: 0.6, quality: 0.6 });
+  assert.ok(Math.abs(up.shrunkGap + down.shrunkGap) < 1e-9);
+  // Shrinking toward the market must never overshoot past it.
+  assert.ok(up.fair > 0.5 && up.fair < 0.6);
+  assert.ok(down.fair < 0.5 && down.fair > 0.4);
+});
+
+// --- Execution ---------------------------------------------------------------
+
+test("posting inside a wide spread beats taking it", () => {
+  const m = market({ yesBid: 0.40, yesAsk: 0.44 });
+  const plan = planExecution(m, "yes", 0.47, 0.44);
+  assert.equal(plan.style, "maker");
+  assert.equal(plan.price, 0.41); // improve the bid by a cent
+  assert.ok(plan.netEdge > plan.alternativeNetEdge);
+  // Saves ~3c of spread plus three quarters of the fee.
+  assert.ok(plan.netEdge - plan.alternativeNetEdge > 0.02);
+});
+
+test("REGRESSION: a very wide quote has no usable midpoint", () => {
+  // A live market quoted 47/76. Its "midpoint" of 61.5c is the average of two
+  // prices nobody will trade at, and the engine reported ~30 points of edge on
+  // BOTH sides at once — impossible, and the tell that the mid meant nothing.
+  const wide = market({ yesBid: 0.47, yesAsk: 0.76 });
+  assert.equal(hasReliableMid(wide), false);
+  assert.equal(hasReliableMid(market({ yesBid: 0.4, yesAsk: 0.42 })), true);
+});
+
+test("REGRESSION: no resting order deep inside a wide spread", () => {
+  // Posting at 48c against a 47/76 quote is arithmetic, not a fill.
+  const wide = market({ yesBid: 0.47, yesAsk: 0.76 });
+  assert.equal(planExecution(wide, "yes", 0.62, 0.76).style, "taker");
+});
+
+test("a one-cent spread leaves no room to post", () => {
+  const m = market({ yesBid: 0.43, yesAsk: 0.44 });
+  assert.equal(planExecution(m, "yes", 0.47, 0.44).style, "taker");
+});
+
+test("near resolution, take the offer rather than rest an order", () => {
+  const now = Date.now();
+  const m = market({ yesBid: 0.40, yesAsk: 0.44, resolutionTime: now + 5 * 60_000 });
+  const plan = planExecution(m, "yes", 0.47, 0.44, now);
+  assert.equal(plan.style, "taker");
+  assert.match(plan.note, /too close to resolution/);
+});
+
+test("the NO side posts against the mirrored book", () => {
+  // A YES ask of 0.44 is a NO bid of 0.56; buying NO takes 0.60.
+  const m = market({ yesBid: 0.40, yesAsk: 0.44 });
+  const plan = planExecution(m, "no", 0.62, 0.60);
+  assert.equal(plan.style, "maker");
+  assert.ok(Math.abs(plan.price - 0.57) < 1e-9, `expected 0.57, got ${plan.price}`);
+});
+
+// --- De-vig ------------------------------------------------------------------
+
+test("the power method also produces a proper distribution", () => {
+  const fair = devigPower([1.909, 1.909]);
+  assert.ok(Math.abs(fair[0]! - 0.5) < 1e-6);
+  assert.ok(Math.abs(fair[0]! + fair[1]! - 1) < 1e-9);
+});
+
+test("power de-vig shades the longshot below proportional", () => {
+  // Books load more margin onto longshots, so removing it evenly leaves the
+  // longshot overstated.
+  const prices = [1.2, 5.5];
+  const prop = devig(prices);
+  const power = devigPower(prices);
+  assert.ok(Math.abs(power.reduce((a, b) => a + b, 0) - 1) < 1e-6);
+  assert.ok(power[1]! < prop[1]!, "power method should shade the longshot down");
 });
 
 // --- End to end --------------------------------------------------------------

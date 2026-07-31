@@ -50,6 +50,23 @@ export const config = {
   },
 
   oddsApiKey: str("ODDS_API_KEY"),
+  /**
+   * Book regions to query. "us" alone misses Pinnacle, which is the single
+   * sharpest line available; "us,eu" includes it but costs double quota.
+   */
+  oddsRegions: str("ODDS_REGIONS", "us"),
+
+  /**
+   * Prior scale of genuine edges, in probability. Governs how hard a
+   * disagreement with the market is shrunk — see core/inference.ts. Raise it
+   * only if you have measured evidence that your edges really are that large.
+   */
+  edgePriorScale: num("EDGE_PRIOR_SCALE", 0.035),
+
+  /** Cap on stake across all legs of one event, as a fraction of bankroll. */
+  maxEventExposure: num("MAX_EVENT_EXPOSURE", 0.05),
+  /** Cap on total staked across the whole board, as a fraction of bankroll. */
+  maxBoardExposure: num("MAX_BOARD_EXPOSURE", 0.25),
 
   bankroll: num("BANKROLL_DOLLARS", 1000),
   kellyFraction: num("KELLY_FRACTION", 0.25),

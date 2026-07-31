@@ -44,7 +44,8 @@ npm run scan -- --min-edge 2 --categories Sports --limit 10
 npm run scan -- --horizon 24h            # today | 24h | all
 npm run scan -- --no-futures             # day-of only, no exceptions
 npm run scan -- --screaming-edge 15      # raise the bar futures must clear
-npm test                                 # 25 tests over the math
+npm run review                           # closing line value, by signal
+npm test                                 # 44 tests over the math
 ```
 
 ## Today's slate, and the one timestamp that matters
@@ -81,7 +82,7 @@ each can be trusted to be *independently right*:
 
 | Source | Weight | What it does |
 |---|---|---|
-| **Cross-book consensus** | 1.00 | De-vigs sportsbook odds across several books, takes the median, compares to Kalshi. Books absorb far more capital than Kalshi, so where they disagree the books are usually closer to true. |
+| **Cross-book consensus** | 1.00 | De-vigs sportsbook odds (power method) and blends them **weighted by how sharp each book is** — Pinnacle and Circa carry ~3x a retail book, because retail books largely copy them and shade for public bias, so treating them as independent opinions double-counts one line. |
 | **Market price** | 0.80 | The crowd, as a prior. Anchors the blend so no signal means no edge. |
 | **Structural** | 0.65 | Renormalizes mutually exclusive events to sum to 100%, stripping the overround. Pure arithmetic. |
 | **Own models** | 0.45 | Your models. Ships with a favourite-longshot-bias correction. |
@@ -115,6 +116,78 @@ arithmetic can establish it. So the dashboard splits structural edges in two:
 - **Conditional** — a YES-side dutch book. Shown with the break-even "none of
   the above" probability, so the judgement becomes one you can actually make:
   *is an unlisted outcome more likely than 1.5%?*
+
+## How it avoids fooling itself
+
+Most of the work in this bot is not finding edges — it's refusing fake ones. Four
+mechanisms, each added after the scanner produced a confidently wrong answer.
+
+### Big disagreements are shrunk, not celebrated
+
+A naive scanner ranks its largest disagreement with the market first. That's
+backwards. Where both Kalshi and the books have real money down, genuine edges
+live in a 1–4 point band; a twenty-point gap is overwhelmingly a *defect* — the
+wrong game matched, a stale line, or two venues pricing different questions
+(Kalshi settling on regulation time while the book includes overtime).
+
+The damage compounds, because Kelly scales with edge: an unshrunk estimate
+stakes hardest exactly where the number is least trustworthy. So `core/inference.ts`
+treats the gap as a noisy measurement and combines it with a prior that real
+edges are small, returning the posterior. Weak evidence, a wide spread, or an
+implausible gap all shrink it further — and past roughly 15 points the surviving
+edge *falls* as the gap widens, because at that scale a bigger number is
+evidence of a bug rather than of profit.
+
+### A bet must survive crossing the spread
+
+Posting a limit order genuinely improves a trade: you save half the spread and
+three quarters of the fee (Kalshi's maker fee is 0.0175 vs 0.07). So the bot
+tells you when to post rather than take.
+
+But qualifying a bet on its posted price is circular. On a wide market, the
+"edge" from resting at bid+1c and marking to the midpoint is just half the
+spread, conjured by the same quote that defined the midpoint — it fires on every
+illiquid market whether or not anything is mispriced. It was manufacturing
+four-point edges from a signal worth less than one. So bets qualify on the
+**taker** price and are merely *executed* as maker. Being paid to provide
+liquidity is a real strategy; it just isn't this one.
+
+### A wide quote has no usable midpoint
+
+A live market quoted 47/76 has a "midpoint" of 61.5c that nobody would trade at.
+The engine reported ~30 points of edge on **both sides at once** — impossible,
+and the tell that the midpoint had stopped carrying information. Markets quoting
+wider than 10c are now excluded from pricing (structural arbitrage is unaffected,
+since it works off real ask prices). On a typical scan this removes ~2,300
+markets.
+
+### Bets on one game are one bet
+
+Kelly sizes each bet as if it were the only one in the world. Five
+recommendations on one baseball game are not five independent bets — they lose
+together. Rather than model a correlation matrix the bot doesn't have, exposure
+is capped per event (5%) and across the board (25%), trimming the weakest bets
+first.
+
+## Measuring whether any of this works
+
+Every recommendation is appended to `data/predictions.jsonl` at the moment it's
+made — the price that justified it is gone as soon as the market moves, so this
+can't be reconstructed later.
+
+```sh
+npm run review
+```
+
+The headline is **closing line value**, not win rate. Whether a bet won is mostly
+luck; you need hundreds of settled bets before a record separates skill from
+variance. CLV asks whether the price moved toward you after you spoke, and
+answers on every bet. Consistently positive CLV is a real edge even during a
+losing month; negative CLV isn't an edge however well the picks are running.
+
+`review` also breaks CLV down by signal, which is how `SOURCE_WEIGHTS` stops
+being my guesswork and starts being measured. Below ~30 bets per signal it says
+almost nothing — let it run.
 
 ## Adding your own model
 
@@ -243,18 +316,29 @@ test/engine.test.ts      25 tests
   ambiguous is skipped rather than guessed, because a wrong match produces a
   confident, fabricated edge. Politics, economics, and weather markets have no
   consensus source at all and lean on the weaker signals.
-- **De-vigging is proportional**, which slightly overstates longshots. On lopsided
-  matchups, trust favourite-side edges more.
-- **Sizing assumes your probability is right.** Quarter-Kelly cushions that; it
-  doesn't fix a bad model.
+- **De-vigging uses the power method**, which handles the favourite-longshot
+  skew better than proportional but is still an approximation of how any given
+  book actually distributes its margin.
+- **Pinnacle needs `ODDS_REGIONS=us,eu`.** The sharpest line is not in the US
+  feed. Adding `eu` doubles quota cost per request — worth it if you can spare it.
+- **Sizing assumes your probability is right.** Quarter-Kelly and the shrinkage
+  cushion that; neither fixes a bad model.
+- **Maker fills are assumed, not modelled.** If a resting order fills instantly
+  it's often because someone knew something. Treat maker edge as optimistic.
 - **Depth comes from the nested payload**, so the top-of-book size is a snapshot.
   Confirm the book before sending anything large.
 - **The futures bar is a guess, not a calibration.** 10 points is set so that
   only something genuinely loud interrupts today's board. It has no backtest
   behind it — tune `SCREAMING_EDGE` to taste.
-- **No results tracking yet.** The obvious next step: log every recommendation
-  and settle it later, so signal weights can be set by measured calibration
-  instead of by the judgement calls in `SOURCE_WEIGHTS`.
+- **The weights are still guesses** — but now measurable. Run `npm run review`
+  once you have ~30 bets per signal and set them from CLV instead of from my
+  judgement.
+- **The biggest unbuilt idea: cross-market coherence.** Kalshi lists the game
+  winner, first-5-innings, run line, totals and team totals on the *same game*.
+  Those are mathematically linked through one scoring distribution, so an
+  inconsistency between them is a mispricing that needs no external data at all
+  — and almost nobody arbitrages it, because it requires modelling the joint
+  distribution rather than reading a price. That's where I'd go next.
 
 ## Advisory only
 

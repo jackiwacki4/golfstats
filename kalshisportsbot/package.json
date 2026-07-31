@@ -10,7 +10,8 @@
     "scan": "tsx src/cli.ts",
     "build": "tsc",
     "check": "tsc --noEmit",
-    "test": "node --test --import tsx test/*.test.ts"
+    "test": "node --test --import tsx test/*.test.ts",
+    "review": "tsx src/review.ts"
   },
   "dependencies": {
     "tsx": "^4.19.2"

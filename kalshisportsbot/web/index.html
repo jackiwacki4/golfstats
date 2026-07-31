@@ -288,11 +288,13 @@ function pickCard(pick) {
     </div>
 
     <div class="ticket">
+      <div><span class="t">How to place</span><span class="m">${esc(pick.execution.actionLabel)}</span></div>
       <div><span class="t">Suggested</span><span class="m">${esc(pick.stake.contractsLabel)} contracts</span></div>
       <div><span class="t">Costs</span><span class="m">${esc(pick.stake.costLabel)}</span></div>
       <div><span class="t">If right</span><span class="m win">${esc(pick.stake.winLabel)}</span></div>
       <div><span class="t">If wrong</span><span class="m lose">${esc(pick.stake.loseLabel)}</span></div>
     </div>
+    ${pick.execution.style === "maker" ? `<div class="caution">${esc(pick.execution.note)}</div>` : ""}
 
     <details>
       <summary>How we got to ${esc(pick.fairLabel)}</summary>

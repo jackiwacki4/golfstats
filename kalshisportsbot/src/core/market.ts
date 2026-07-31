@@ -105,6 +105,41 @@ export function isTradeable(view: MarketView, now = Date.now()): boolean {
   );
 }
 
+/**
+ * Widest spread at which the midpoint still means something.
+ *
+ * Kalshi's liquid markets quote a cent or two wide. Past roughly a dime, the
+ * "midpoint" stops being a price anyone would trade at and becomes the average
+ * of two numbers nobody will touch.
+ */
+export const MAX_RELIABLE_SPREAD = 0.1;
+
+/**
+ * Does this market have a midpoint worth reasoning from?
+ *
+ * This gate exists because of a specific and instructive failure. A market
+ * quoted 47/76 has a midpoint of 61.5c, and the engine will happily treat that
+ * as the crowd's view — then notice you could rest a bid at 48c and report
+ * thirteen points of edge. The edge is entirely fictional: it comes from the
+ * width of the spread, not from any disagreement about the outcome, and a
+ * resting bid that far below fair value simply never fills.
+ *
+ * Worse, it produced *both* sides of the same market as strong buys
+ * simultaneously, which is impossible and was the tell that the midpoint had
+ * stopped carrying information. Structural arbitrage is unaffected — it works
+ * off real ask prices rather than midpoints — so this gate applies only where a
+ * fair value is being estimated.
+ */
+export function hasReliableMid(view: MarketView): boolean {
+  return (
+    Number.isFinite(view.mid) &&
+    Number.isFinite(view.spread) &&
+    view.spread <= MAX_RELIABLE_SPREAD &&
+    view.mid > 0 &&
+    view.mid < 1
+  );
+}
+
 /** True when this market resolves inside the slate window. */
 export function resolvesWithin(
   view: MarketView,

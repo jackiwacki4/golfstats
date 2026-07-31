@@ -74,14 +74,12 @@ export function sportKeyFor(seriesTicker: string): string | null {
 }
 
 /**
- * Strip vig by proportional (multiplicative) de-vigging.
+ * Strip vig proportionally: divide each implied probability by their total.
  *
- * Implied probabilities from a book's prices sum to something like 1.05; the
- * 5% is the house's margin. Dividing each by the total rescales them to sum to
- * 1. This assumes the margin is spread proportionally across outcomes, which is
- * the standard assumption and close enough for two-way markets. It does slightly
- * overstate longshots — books load more margin onto them — so on lopsided
- * matchups treat a favourite-side edge as the more trustworthy one.
+ * Simple and standard, but it assumes the book spreads its margin evenly across
+ * outcomes, and books demonstrably do not — they load more of it onto
+ * longshots, because that's where the recreational money goes. On a lopsided
+ * matchup this leaves the longshot's fair probability overstated.
  */
 export function devig(decimalPrices: number[]): number[] {
   const implied = decimalPrices.map((price) => (price > 1 ? 1 / price : 0));
@@ -90,12 +88,88 @@ export function devig(decimalPrices: number[]): number[] {
   return implied.map((p) => p / total);
 }
 
-const median = (values: number[]): number => {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length === 0) return NaN;
-  return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
+/**
+ * Strip vig by the power method: find k such that Σ(implied_i^k) = 1.
+ *
+ * The improvement over proportional is that it removes margin
+ * *multiplicatively in log space*, taking proportionally more out of longshots
+ * than favourites — which is how books actually apply it. On a 90/10 market the
+ * two methods can disagree by a point or more on the longshot, and since a
+ * point is a meaningful fraction of a real edge, that difference is worth
+ * having.
+ *
+ * k is found by bisection. Since every implied probability is below 1, raising
+ * them to a higher power shrinks the sum monotonically, so the root is unique
+ * and always above 1 whenever the book has any margin at all.
+ */
+export function devigPower(decimalPrices: number[]): number[] {
+  const implied = decimalPrices.map((price) => (price > 1 ? 1 / price : 0));
+  if (implied.some((p) => !(p > 0 && p < 1))) return devig(decimalPrices);
+
+  const sumAt = (k: number): number =>
+    implied.reduce((sum, p) => sum + Math.pow(p, k), 0);
+
+  if (sumAt(1) <= 1) return devig(decimalPrices); // no margin to strip
+
+  let lo = 1;
+  let hi = 8;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (sumAt(mid) > 1) lo = mid;
+    else hi = mid;
+  }
+
+  const k = (lo + hi) / 2;
+  const out = implied.map((p) => Math.pow(p, k));
+  const total = out.reduce((sum, p) => sum + p, 0);
+  return total > 0 ? out.map((p) => p / total) : devig(decimalPrices);
+}
+
+/**
+ * How much each book's opinion is worth.
+ *
+ * Not all books are equally informative, and the gap is large. Pinnacle and
+ * Circa run low margins and high limits and *welcome* sharp money, so their
+ * lines are a genuine market-clearing price. The retail-facing books largely
+ * copy them, shade for public bias, and manage risk by limiting winners — so
+ * treating a soft book as an independent opinion double-counts Pinnacle's
+ * number while adding the soft book's bias on top.
+ *
+ * An unweighted median across eight books is therefore mostly a measure of what
+ * the copying books think.
+ */
+const BOOK_WEIGHTS: Record<string, number> = {
+  pinnacle: 3.0,
+  circasports: 2.5,
+  bookmaker: 2.0,
+  betonlineag: 1.8,
+  lowvig: 1.8,
+  betfair_ex_us: 1.8,
+  matchbook: 1.5,
+  draftkings: 1.0,
+  fanduel: 1.0,
+  betmgm: 1.0,
+  williamhill_us: 1.0,
+  betrivers: 0.8,
+  pointsbetus: 0.8,
 };
+const DEFAULT_BOOK_WEIGHT = 0.6;
+
+const bookWeight = (key: string): number =>
+  BOOK_WEIGHTS[key.toLowerCase()] ?? DEFAULT_BOOK_WEIGHT;
+
+/** Weighted average in log-odds space — respects ratios at the extremes. */
+function weightedConsensus(samples: { p: number; weight: number }[]): number {
+  let weighted = 0;
+  let total = 0;
+  for (const { p, weight } of samples) {
+    const safe = Math.min(1 - 1e-6, Math.max(1e-6, p));
+    weighted += Math.log(safe / (1 - safe)) * weight;
+    total += weight;
+  }
+  if (!(total > 0)) return NaN;
+  return 1 / (1 + Math.exp(-weighted / total));
+}
 
 function tokenize(text: string): string[] {
   return (
@@ -241,7 +315,7 @@ async function fetchSport(sportKey: string): Promise<OddsEvent[]> {
 
   const url = new URL(`${ODDS_API}/sports/${sportKey}/odds`);
   url.searchParams.set("apiKey", config.oddsApiKey);
-  url.searchParams.set("regions", "us");
+  url.searchParams.set("regions", config.oddsRegions);
   url.searchParams.set("markets", "h2h");
   url.searchParams.set("oddsFormat", "decimal");
 
@@ -368,38 +442,50 @@ function matchMarket(market: MarketView, events: OddsEvent[]): ProbabilityEstima
 
   const targetTeam = backsHome ? game.home_team : game.away_team;
 
-  // De-vig each book separately, then take the median across books. The median
-  // shrugs off one book with a stale or deliberately off-market line.
-  const perBook: number[] = [];
+  // De-vig each book on its own, then blend them weighted by how much the
+  // book's opinion is actually worth.
+  const samples: { p: number; weight: number; key: string }[] = [];
   for (const bookmaker of game.bookmakers) {
     const h2h = bookmaker.markets.find((m) => m.key === "h2h");
     if (!h2h || h2h.outcomes.length < 2) continue;
 
-    const fair = devig(h2h.outcomes.map((o) => o.price));
+    const fair = devigPower(h2h.outcomes.map((o) => o.price));
     const index = h2h.outcomes.findIndex((o) => o.name === targetTeam);
     if (index === -1) continue;
 
     const probability = fair[index];
-    if (probability !== undefined && Number.isFinite(probability)) perBook.push(probability);
+    if (probability === undefined || !Number.isFinite(probability)) continue;
+    samples.push({ p: probability, weight: bookWeight(bookmaker.key), key: bookmaker.key });
   }
 
-  if (perBook.length < 2) return null; // one book is an opinion, not a consensus
+  if (samples.length < 2) return null; // one book is an opinion, not a consensus
 
-  const consensus = median(perBook);
+  const consensus = weightedConsensus(samples);
   if (!Number.isFinite(consensus)) return null;
 
-  // More books agreeing, and agreeing tightly, means more confidence.
-  const spread = Math.max(...perBook) - Math.min(...perBook);
-  const bookCount = clamp01(perBook.length / 6);
+  const probabilities = samples.map((s) => s.p);
+  const spread = Math.max(...probabilities) - Math.min(...probabilities);
+
+  // Confidence rises with corroboration and with agreement, but the sharp books
+  // carry it: six soft books agreeing is largely six copies of one opinion, so
+  // their unanimity is much weaker evidence than it looks.
+  const sharpWeight = samples
+    .filter((s) => bookWeight(s.key) >= 1.5)
+    .reduce((sum, s) => sum + s.weight, 0);
+
+  const breadth = clamp01(samples.length / 6);
+  const sharpness = clamp01(sharpWeight / 3);
   const agreement = clamp01(1 - spread / 0.1);
-  const confidence = clamp01(0.45 + 0.3 * bookCount + 0.25 * agreement);
+  const confidence = clamp01(0.3 + 0.25 * breadth + 0.25 * sharpness + 0.2 * agreement);
+
+  const sharpNote = sharpness > 0 ? ", sharp books included" : ", no sharp book in the mix";
 
   return {
     source: "consensus",
     probability: clamp01(consensus),
     confidence,
     rationale:
-      `${perBook.length} sportsbooks de-vig to ${(consensus * 100).toFixed(1)}% for ` +
-      `${targetTeam} (book spread ${(spread * 100).toFixed(1)} pts).`,
+      `${samples.length} sportsbooks de-vig to ${(consensus * 100).toFixed(1)}% for ` +
+      `${targetTeam} (spread ${(spread * 100).toFixed(1)} pts${sharpNote}).`,
   };
 }

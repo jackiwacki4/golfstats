@@ -41,6 +41,20 @@ export interface PresentedPick {
     loseLabel: string;
   };
 
+  /** How to place it: take the offer, or post a limit order. */
+  execution: {
+    style: "taker" | "maker";
+    actionLabel: string;
+    note: string;
+  };
+
+  /** How much of the raw disagreement with the crowd survived shrinkage. */
+  discipline: {
+    rawGapLabel: string;
+    keptLabel: string;
+    implausible: boolean;
+  };
+
   /** One sentence a person can act on without reading the breakdown. */
   summary: string;
   drivers: { source: string; label: string; text: string }[];
@@ -195,6 +209,11 @@ function presentPick(bet: BetRecommendation, rank: number, tz: string): Presente
   if (bet.horizonKind === "future") badges.push("Future — cleared the high bar");
   badges.push(...bet.flags);
 
+  const actionLabel =
+    bet.execution.style === "maker"
+      ? `Post a limit at ${cents(bet.execution.price)}`
+      : `Take the offer at ${cents(bet.execution.price)}`;
+
   return {
     id: `${bet.ticker}-${bet.side}`,
     rank,
@@ -212,6 +231,18 @@ function presentPick(bet: BetRecommendation, rank: number, tz: string): Presente
 
     confidence: confidenceOf(bet.confidence),
 
+    execution: {
+      style: bet.execution.style,
+      actionLabel,
+      note: bet.execution.note,
+    },
+
+    discipline: {
+      rawGapLabel: pts(bet.shrinkage.rawGap),
+      keptLabel: `${(bet.shrinkage.factor * 100).toFixed(0)}% kept`,
+      implausible: bet.shrinkage.implausible,
+    },
+
     stake: {
       contractsLabel: `${bet.stake.contracts}`,
       costLabel: usd(bet.stake.costDollars),
@@ -227,6 +258,15 @@ function presentPick(bet: BetRecommendation, rank: number, tz: string): Presente
         text: `The market's own midpoint is ${cents(crowdPrice)}.`,
       },
       ...drivers,
+      {
+        source: "discipline",
+        label: "Discipline",
+        text:
+          `Raw disagreement was ${pts(bet.shrinkage.rawGap)}; we kept ` +
+          `${(bet.shrinkage.factor * 100).toFixed(0)}% of it. Big gaps are usually a ` +
+          "mismatch or a stale line, so the estimate is pulled back toward the market " +
+          "in proportion to how well the evidence holds up.",
+      },
     ],
     badges,
     ticker: bet.ticker,
