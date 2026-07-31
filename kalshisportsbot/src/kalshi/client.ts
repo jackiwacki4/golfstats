@@ -130,6 +130,8 @@ export interface FetchEventsOptions {
   /** Cap on pages; each page is up to 200 events. Bounds a scan's runtime. */
   maxPages?: number;
   seriesTicker?: string;
+  /** Bypass the cache and refetch. Set when the user explicitly asks for a refresh. */
+  force?: boolean;
 }
 
 /**
@@ -156,7 +158,7 @@ export async function fetchOpenEvents(
   options: FetchEventsOptions = {},
 ): Promise<KalshiEvent[]> {
   const full = !options.seriesTicker;
-  if (full && boardCache && Date.now() - boardCache.at < BOARD_TTL_MS) {
+  if (full && !options.force && boardCache && Date.now() - boardCache.at < BOARD_TTL_MS) {
     return boardCache.events;
   }
 

@@ -61,6 +61,7 @@ const server = createServer(async (req, res) => {
     }
     const screaming = url.searchParams.get("screamingEdge");
     if (screaming) options.screamingEdge = Number(screaming) / 100;
+    if (url.searchParams.get("fresh") === "1") options.fresh = true;
     if (url.searchParams.get("futures") === "off") {
       options.includeScreamingFutures = false;
     }

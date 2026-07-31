@@ -21,6 +21,7 @@ import { fuse } from "../src/engine/fuse.js";
 import { devig, devigPower, splitMatchup, teamsMatch } from "../src/signals/consensus.js";
 import { shrinkTowardMarket } from "../src/core/inference.js";
 import { planExecution } from "../src/core/execution.js";
+import { describeWager } from "../src/core/wager.js";
 import { findArbitrage, normalizeExclusiveSet } from "../src/signals/structural.js";
 import type { ProbabilityEstimate } from "../src/signals/types.js";
 
@@ -35,6 +36,7 @@ function market(overrides: Partial<MarketView> = {}): MarketView {
     title: "Test market",
     yesLabel: "Yes",
     eventTitle: "Test event",
+    rulesPrimary: "",
     category: "Test",
     closeTime: Date.now() + 86_400_000,
     resolutionTime: Date.now() + 86_400_000,
@@ -386,6 +388,65 @@ test("a nearly-over day rolls forward to tomorrow's board", () => {
 test("parlay markets are excluded from scanning", () => {
   assert.equal(isMultivariate({ mve_collection_ticker: "KXMVE-R" } as never), true);
   assert.equal(isMultivariate({ ticker: "KXMLBGAME-X" } as never), false);
+});
+
+// --- Describing the wager ----------------------------------------------------
+
+/** Kalshi labels only the YES side, so `no_sub_title` is a copy, not a negation. */
+const wagerOf = (yesLabel: string, side: "yes" | "no", extra: Partial<MarketView> = {}) =>
+  describeWager(market({ yesLabel, ...extra }), side);
+
+test("REGRESSION: the NO side of a spread reads as a real sentence", () => {
+  // This used to render as "NOT Las Vegas wins by over 13.5 points", leaving the
+  // reader to derive that it covers both a narrow win AND an outright loss.
+  const yes = wagerOf("Las Vegas wins by over 13.5 points", "yes");
+  const no = wagerOf("Las Vegas wins by over 13.5 points", "no");
+  assert.equal(yes.typeLabel, "Spread");
+  assert.equal(yes.youWinIf, "Las Vegas wins by 14 or more points.");
+  assert.equal(no.youWinIf, "Las Vegas wins by 13 or fewer points, or loses outright.");
+  assert.ok(!no.youWinIf.includes("NOT"));
+});
+
+test("game totals and team totals are not confused", () => {
+  const total = wagerOf("Over 163.5 points scored", "yes");
+  assert.equal(total.typeLabel, "Over / Under");
+  assert.match(total.youWinIf, /Both teams combined score 164 or more points/);
+
+  const teamTotal = wagerOf("A's over 1.5 runs scored", "yes");
+  assert.equal(teamTotal.typeLabel, "Team total");
+  assert.match(teamTotal.youWinIf, /A's scores 2 or more runs/);
+});
+
+test("a partial-game market says so explicitly", () => {
+  // Easy to mistake for a full-game bet and lose on a late comeback.
+  const w = wagerOf("San Francisco wins first 5 innings", "yes");
+  assert.equal(w.typeLabel, "Partial game");
+  assert.match(w.youWinIf, /first 5 innings/);
+  assert.match(w.youWinIf, /not the full game/);
+});
+
+test("player props name the stat, and negate by count", () => {
+  const m = market({ yesLabel: "Sonny Gray: 3+", title: "Sonny Gray: 3+ strikeouts?" });
+  assert.equal(describeWager(m, "yes").youWinIf, "Sonny Gray records 3 or more strikeouts.");
+  assert.equal(describeWager(m, "no").youWinIf, "Sonny Gray records fewer than 3 strikeouts.");
+});
+
+test("moneylines name the opponent on both sides", () => {
+  const m = market({ yesLabel: "Boston", eventTitle: "Boston vs A's" });
+  assert.equal(describeWager(m, "yes").typeLabel, "Moneyline");
+  assert.match(describeWager(m, "yes").youWinIf, /Boston wins/);
+  assert.match(describeWager(m, "no").youWinIf, /Boston loses/);
+});
+
+test("price levels invert correctly", () => {
+  assert.match(wagerOf("$54,600 or above", "yes").youWinIf, /at \$54,600 or above/);
+  assert.match(wagerOf("$54,600 or above", "no").youWinIf, /below \$54,600/);
+});
+
+test("an unrecognised label still negates readably", () => {
+  const w = wagerOf("Something entirely novel happens", "no");
+  assert.equal(w.typeLabel, "Market");
+  assert.match(w.youWinIf, /does not happen/);
 });
 
 // --- Shrinkage ---------------------------------------------------------------

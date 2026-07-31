@@ -18,8 +18,20 @@ import { formatClose, shortTzName } from "../core/time.js";
 export interface PresentedPick {
   id: string;
   rank: number;
-  /** "Buy YES · Dodgers" */
+  /**
+   * The wager in plain English — "Las Vegas wins by 14 or more points."
+   *
+   * This is the bet, not the mechanics. Kalshi's own label only describes the
+   * YES side, so a NO position used to render as "NOT Las Vegas wins by over
+   * 13.5 points" and left the reader to work out the negation themselves.
+   */
   headline: string;
+  /** What kind of bet: Moneyline, Spread, Over / Under, Player prop… */
+  wagerType: string;
+  /** What to actually click on Kalshi — deliberately separate from the bet. */
+  mechanics: string;
+  /** Kalshi's own settlement wording. The final authority if anything is unclear. */
+  officialRule: string;
   /** The question being bet on. */
   matchup: string;
   league: string;
@@ -217,7 +229,10 @@ function presentPick(bet: BetRecommendation, rank: number, tz: string): Presente
   return {
     id: `${bet.ticker}-${bet.side}`,
     rank,
-    headline: `Buy ${bet.side.toUpperCase()} · ${bet.label}`,
+    headline: bet.wager.youWinIf,
+    wagerType: bet.wager.typeLabel,
+    mechanics: `${bet.wager.mechanics} at ${cents(bet.price)}`,
+    officialRule: bet.wager.officialRule,
     matchup: bet.eventTitle,
     league: leagueName(bet.seriesTicker, bet.category),
     resolvesLabel: `Resolves ${formatClose(bet.closeTime, tz)}`,

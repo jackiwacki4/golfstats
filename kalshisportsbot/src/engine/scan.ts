@@ -15,6 +15,7 @@ import { evPerContract, marginalFeeRate, round2, sizeStake, toAmericanOdds, type
 import { shrinkTowardMarket } from "../core/inference.js";
 import { record } from "../core/journal.js";
 import { feeFor, planExecution, type ExecutionPlan } from "../core/execution.js";
+import { describeWager, type WagerDescription } from "../core/wager.js";
 import { buildConsensus } from "../signals/consensus.js";
 import { readMicrostructure, stalePriceEstimate } from "../signals/microstructure.js";
 import { runModels } from "../signals/models.js";
@@ -59,6 +60,9 @@ export interface BetRecommendation {
 
   /** How to get the position on, and what it costs each way. */
   execution: ExecutionPlan;
+
+  /** The bet stated in plain English, side-aware. */
+  wager: WagerDescription;
 
   /** How much of the raw disagreement with the crowd survived shrinkage. */
   shrinkage: {
@@ -111,6 +115,8 @@ export interface ScanOptions {
   includeScreamingFutures?: boolean;
   /** Edge a future must clear to interrupt the day-of board. */
   screamingEdge?: number;
+  /** Skip the 90-second board cache. Set when the user presses refresh. */
+  fresh?: boolean;
 }
 
 /**
@@ -212,6 +218,7 @@ function evaluateSide(
     contributions: fused.contributions,
     horizonKind,
     execution,
+    wager: describeWager(market, side),
     shrinkage: {
       rawGap: shrunk.rawGap,
       shrunkGap: shrunk.shrunkGap,
@@ -383,7 +390,7 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
   // One sweep of every open event, then split by resolution time. Kalshi's
   // cursor order is unrelated to when things resolve, so the whole board has to
   // be in hand before "today" means anything.
-  const events = await fetchOpenEvents({ maxPages });
+  const events = await fetchOpenEvents({ maxPages, force: options.fresh });
   const collected = collectFromEvents(events, startedAt, categoryFilter);
 
   const onSlate = (market: MarketView): boolean =>

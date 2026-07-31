@@ -15,6 +15,8 @@ export interface MarketView {
   title: string;
   yesLabel: string;
   eventTitle: string;
+  /** Kalshi's own settlement wording — the final authority on what settles. */
+  rulesPrimary: string;
   category: string;
   /** Kalshi's trading deadline. For sports this is a settlement backstop, not game time. */
   closeTime: number;
@@ -71,6 +73,7 @@ export function normalizeMarket(market: KalshiMarket, event?: KalshiEvent): Mark
     title: market.title,
     yesLabel: market.yes_sub_title || market.title,
     eventTitle: event?.title ?? market.title,
+    rulesPrimary: market.rules_primary ?? "",
     category: event?.category ?? "",
     closeTime: time(market.close_time),
     resolutionTime: time(market.expected_expiration_time) || time(market.close_time),

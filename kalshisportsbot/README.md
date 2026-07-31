@@ -45,7 +45,7 @@ npm run scan -- --horizon 24h            # today | 24h | all
 npm run scan -- --no-futures             # day-of only, no exceptions
 npm run scan -- --screaming-edge 15      # raise the bar futures must clear
 npm run review                           # closing line value, by signal
-npm test                                 # 44 tests over the math
+npm test                                 # 51 tests over the math
 ```
 
 ## Today's slate, and the one timestamp that matters
@@ -168,6 +168,28 @@ recommendations on one baseball game are not five independent bets — they lose
 together. Rather than model a correlation matrix the bot doesn't have, exposure
 is capped per event (5%) and across the board (25%), trimming the weakest bets
 first.
+
+## Saying what the bet actually is
+
+Kalshi labels a contract from the YES side only — and `no_sub_title` is a *copy*
+of `yes_sub_title`, not its negation. So a NO position on "Las Vegas wins by over
+13.5 points" had no label of its own and rendered as **"NOT Las Vegas wins by
+over 13.5 points"**, leaving you to work out under time pressure that it covers
+a narrow win *and* an outright loss.
+
+`core/wager.ts` classifies each market and builds the negation per family, so
+every pick states two separate things:
+
+| | |
+|---|---|
+| **The bet** | "Las Vegas wins by 13 or fewer points, or loses outright." |
+| **The mechanics** | Buy NO on "Las Vegas wins by over 13.5 points" at 55¢ |
+
+Recognised types: moneyline, spread, over/under, team total, partial game (first
+5 innings — easy to mistake for a full game), player prop, price level, price
+range. Anything unrecognised falls back to the raw label with a plain negation.
+Kalshi's own settlement wording is shown under "How we got to…" as the final
+authority.
 
 ## Measuring whether any of this works
 
@@ -296,6 +318,10 @@ src/
   core/money.ts          fees, EV, Kelly, sizing        <- the math that matters
   core/market.ts         normalization, resolution time, parlay detection
   core/time.ts           slate windows in a real timezone
+  core/wager.ts          says in English what bet is being suggested
+  core/inference.ts      shrinks disagreements toward the market
+  core/execution.ts      take the offer, or post a limit order
+  core/journal.ts        records every prediction for later scoring
   core/cache.ts          disk cache with TTL
   signals/structural.ts  arbitrage + overround stripping
   signals/consensus.ts   sportsbook de-vig + matching
@@ -306,7 +332,7 @@ src/
   engine/present.ts      view model the website renders
   server.ts / cli.ts     site + terminal
 web/index.html           the website
-test/engine.test.ts      25 tests
+test/engine.test.ts      51 tests
 ```
 
 ## Limitations worth knowing

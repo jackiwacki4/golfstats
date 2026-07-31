@@ -117,7 +117,19 @@
     font-family: var(--mono); font-size: 13px; color: var(--ink-2); font-weight: 650;
   }
   .pick-title { flex: 1; min-width: 0; }
-  .pick-title h3 { margin: 0 0 3px; font-size: 19px; letter-spacing: -.012em; }
+  .pick-title .wager-type {
+    display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 4px;
+  }
+  .pick-title h3 { margin: 0 0 3px; font-size: 19px; letter-spacing: -.012em; line-height: 1.3; }
+  .do-this {
+    margin-top: 12px; padding: 10px 13px; border-radius: 9px;
+    background: var(--plane); border: 1px dashed var(--axis);
+    font-size: 13.5px; color: var(--ink-2);
+  }
+  .do-this b { color: var(--ink); font-weight: 650; }
+  .rule { margin-top: 10px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  .rule b { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
   .pick-title .q { color: var(--ink-2); font-size: 14.5px; }
   .pick-title .when { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 
@@ -266,6 +278,7 @@ function pickCard(pick) {
     <div class="pick-top">
       <div class="rank">${pick.rank}</div>
       <div class="pick-title">
+        <div class="wager-type">${esc(pick.wagerType)}</div>
         <h3>${esc(pick.headline)}</h3>
         <div class="q">${esc(pick.matchup)}</div>
         <div class="when">${esc(pick.resolvesLabel)}</div>
@@ -281,6 +294,10 @@ function pickCard(pick) {
 
     <p class="say">${esc(pick.summary)}</p>
 
+    <div class="do-this">
+      On Kalshi: <b>${esc(pick.mechanics)}</b> &mdash; ${esc(pick.execution.actionLabel.toLowerCase())}
+    </div>
+
     <div class="chips">
       <span class="chip ${pick.confidence.tier}">${pick.confidence.tier === "strong" ? "●" : pick.confidence.tier === "moderate" ? "◐" : "○"} ${esc(pick.confidence.label)}</span>
       <span class="chip">${esc(pick.oddsLabel)}</span>
@@ -288,7 +305,6 @@ function pickCard(pick) {
     </div>
 
     <div class="ticket">
-      <div><span class="t">How to place</span><span class="m">${esc(pick.execution.actionLabel)}</span></div>
       <div><span class="t">Suggested</span><span class="m">${esc(pick.stake.contractsLabel)} contracts</span></div>
       <div><span class="t">Costs</span><span class="m">${esc(pick.stake.costLabel)}</span></div>
       <div><span class="t">If right</span><span class="m win">${esc(pick.stake.winLabel)}</span></div>
@@ -299,6 +315,7 @@ function pickCard(pick) {
     <details>
       <summary>How we got to ${esc(pick.fairLabel)}</summary>
       <div class="drivers">${drivers}</div>
+      ${pick.officialRule ? `<div class="rule"><b>Kalshi's exact settlement rule</b>${esc(pick.officialRule)}</div>` : ""}
       <div class="meta-line">${esc(pick.ticker)} · <a href="${esc(pick.kalshiUrl)}" target="_blank" rel="noopener noreferrer">find on Kalshi ↗</a></div>
     </details>
   </article>`;
@@ -366,7 +383,7 @@ function render(board) {
   if (board.notes.length) {
     parts.push(`<div class="notes">${board.notes.map((n) => `<div>· ${esc(n)}</div>`).join("")}</div>`);
   }
-  parts.push(`<div class="notes"><div>Scanned in ${esc(board.meta.durationLabel)} at ${esc(board.meta.generatedLabel)} · bankroll ${esc(board.meta.bankrollLabel)}</div></div>`);
+  parts.push(`<div class="notes"><div><b>Prices as of ${esc(board.meta.generatedLabel)} ${esc(board.meta.tzAbbrev)}</b> · scanned in ${esc(board.meta.durationLabel)} · bankroll ${esc(board.meta.bankrollLabel)}</div></div>`);
 
   out.innerHTML = parts.join("");
 }
@@ -377,7 +394,8 @@ async function load() {
   button.textContent = "Running…";
   out.innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
 
-  const params = new URLSearchParams({ horizon, minEdge: $("minEdge").value });
+  // Explicit click means the user wants current prices, so bypass the cache.
+  const params = new URLSearchParams({ horizon, minEdge: $("minEdge").value, fresh: "1" });
 
   try {
     const response = await fetch(`/api/board?${params}`);
