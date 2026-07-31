@@ -41,7 +41,13 @@ interface OddsEvent {
 }
 
 /**
- * Kalshi series prefix -> The Odds API sport key.
+ * Kalshi series prefix -> The Odds API sport key *prefix*.
+ *
+ * A prefix, not an exact key, because tennis has no single league feed: the
+ * books publish `tennis_atp_wimbledon`, `tennis_atp_us_open` and so on, and
+ * asking for a bare `tennis_atp` returns a 404. Prefixes are resolved against
+ * the live catalogue at scan time, so whichever tournaments are running get
+ * picked up automatically and out-of-season keys are never requested.
  *
  * Only sports with live Kalshi markets get queried, because the free tier is
  * 500 requests/month and each sport is one request.
@@ -91,18 +97,141 @@ const median = (values: number[]): number => {
   return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
 };
 
-/** Normalize a team name to its nickname token — "Los Angeles Dodgers" -> "dodgers". */
-function nickname(teamName: string): string {
-  const cleaned = teamName
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .trim();
-  const words = cleaned.split(/\s+/).filter(Boolean);
-  return words[words.length - 1] ?? cleaned;
+function tokenize(text: string): string[] {
+  return (
+    text
+      .toLowerCase()
+      // Drop the possessive before punctuation is stripped, so Kalshi's "A's"
+      // reduces to "a" (an initial for Athletics) rather than "a s".
+      .replace(/'s\b/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+  );
 }
 
-function normalizeText(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+/**
+ * Does a Kalshi team string name the same team as a sportsbook team name?
+ *
+ * The two sources describe teams completely differently, which is the whole
+ * difficulty. Kalshi uses the city — "Miami", "Pittsburgh" — while the books
+ * use the full name, "Miami Marlins". Matching on the last word (the nickname)
+ * finds nothing at all, because Kalshi never sends one.
+ *
+ * Where two teams share a city, Kalshi disambiguates with a single letter:
+ * "New York M" and "New York Y". So the rule is that every Kalshi token must be
+ * a *prefix* of some book token — "m" matches "mets" but not "yankees".
+ *
+ * Each token must claim a *different* book token, and that requirement is
+ * carrying real weight rather than being defensive tidiness. Without it,
+ * "Chicago C" (the Cubs) matches "Chicago White Sox", because the stray "c"
+ * happily re-uses "chicago" as its prefix. Forcing distinct assignments makes
+ * "c" find "cubs" or fail, which is the correct behaviour on the one case most
+ * likely to hand you a confident bet on the wrong team.
+ */
+export function teamsMatch(kalshiTeam: string, bookTeam: string): boolean {
+  const wanted = tokenize(kalshiTeam);
+  const available = tokenize(bookTeam);
+  if (wanted.length === 0 || available.length === 0) return false;
+  if (wanted.length > available.length) return false;
+
+  const taken = new Set<number>();
+
+  // Longest tokens first: the specific ones ("chicago") should claim their
+  // match before a bare initial ("c") can steal it.
+  const order = [...wanted].sort((a, b) => b.length - a.length);
+
+  for (const token of order) {
+    let claimed = false;
+
+    for (let i = 0; i < available.length; i++) {
+      if (taken.has(i)) continue;
+      if (available[i]!.startsWith(token)) {
+        taken.add(i);
+        claimed = true;
+        break;
+      }
+    }
+    if (claimed) continue;
+
+    // Initialisms: Kalshi writes the White Sox as "Chicago WS", where one token
+    // stands for the initials of several. Try to spend the token's letters
+    // across a run of consecutive unclaimed tokens.
+    for (let start = 0; start + token.length <= available.length; start++) {
+      let fits = true;
+      for (let offset = 0; offset < token.length; offset++) {
+        const index = start + offset;
+        if (taken.has(index) || !available[index]!.startsWith(token[offset]!)) {
+          fits = false;
+          break;
+        }
+      }
+      if (fits) {
+        for (let offset = 0; offset < token.length; offset++) taken.add(start + offset);
+        claimed = true;
+        break;
+      }
+    }
+    if (!claimed) return false;
+  }
+  return true;
+}
+
+/**
+ * Pull the two sides out of a Kalshi matchup title.
+ *
+ * Titles read "Miami vs New York M" or "Miami vs New York M Winner?", so the
+ * separator is reliable. Splitting beats searching the whole string for team
+ * names: it keeps the two sides distinct, which is what makes it possible to
+ * tell which one buying YES actually backs.
+ */
+export function splitMatchup(title: string): [string, string] | null {
+  const cleaned = title.replace(/\s+(winner|moneyline)\s*\??$/i, "").trim();
+  const parts = cleaned.split(/\s+vs\.?\s+/i);
+  if (parts.length !== 2) return null;
+
+  // Kalshi labels special fixtures with a prefix — "Hall of Fame Game: Carolina
+  // vs Arizona" — which otherwise gets tokenized as part of the team name.
+  const a = parts[0]?.replace(/^.*:\s*/, "").trim();
+  const b = parts[1]?.trim();
+  if (!a || !b) return null;
+  return [a, b];
+}
+
+interface SportEntry {
+  key: string;
+  active: boolean;
+  has_outrights: boolean;
+}
+
+/**
+ * The catalogue of sports the books currently cover.
+ *
+ * Free to call — the sports list doesn't count against the monthly quota — and
+ * it's what turns a hardcoded guess at a league key into something that tracks
+ * the actual season and tournament calendar.
+ */
+async function fetchAvailableSports(): Promise<SportEntry[]> {
+  const cached = getCached<SportEntry[]>("odds:sports", 6 * 60 * 60 * 1000);
+  if (cached) return cached;
+
+  const url = new URL(`${ODDS_API}/sports`);
+  url.searchParams.set("apiKey", config.oddsApiKey);
+  const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+  if (!response.ok) throw new Error(`Odds API sports list: HTTP ${response.status}`);
+
+  const sports = (await response.json()) as SportEntry[];
+  setCached("odds:sports", sports);
+  return sports;
+}
+
+/** Live keys matching a configured prefix — exact match wins, else all in-season. */
+function resolveSportKeys(prefix: string, catalogue: SportEntry[]): string[] {
+  const exact = catalogue.find((s) => s.key === prefix);
+  if (exact) return exact.active ? [exact.key] : [];
+  return catalogue
+    .filter((s) => s.active && !s.has_outrights && s.key.startsWith(prefix))
+    .map((s) => s.key);
 }
 
 async function fetchSport(sportKey: string): Promise<OddsEvent[]> {
@@ -164,51 +293,77 @@ export async function buildConsensus(markets: MarketView[]): Promise<ConsensusRe
     return { estimates, notes };
   }
 
-  for (const [sportKey, sportMarkets] of wanted) {
-    let events: OddsEvent[];
-    try {
-      events = await fetchSport(sportKey);
-    } catch (err) {
-      notes.push(`${sportKey}: ${err instanceof Error ? err.message : String(err)}`);
+  let catalogue: SportEntry[];
+  try {
+    catalogue = await fetchAvailableSports();
+  } catch (err) {
+    notes.push(
+      `Could not reach the odds catalogue: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return { estimates, notes };
+  }
+
+  for (const [prefix, sportMarkets] of wanted) {
+    const keys = resolveSportKeys(prefix, catalogue);
+    if (keys.length === 0) {
+      notes.push(`${prefix}: nothing in season at the books right now.`);
       continue;
+    }
+
+    const games: OddsEvent[] = [];
+    for (const key of keys) {
+      try {
+        games.push(...(await fetchSport(key)));
+      } catch (err) {
+        notes.push(`${key}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     let matched = 0;
     for (const market of sportMarkets) {
-      const estimate = matchMarket(market, events);
+      const estimate = matchMarket(market, games);
       if (estimate) {
         estimates.set(market.ticker, estimate);
         matched++;
       }
     }
-    notes.push(`${sportKey}: matched ${matched}/${sportMarkets.length} markets across ${events.length} games.`);
+
+    // Most Kalshi markets in a league are spreads, totals and props, which have
+    // no moneyline to compare against — so a low ratio here is expected, not a
+    // fault. Report matched games too, which is the number that says whether
+    // matching is actually working.
+    notes.push(
+      `${prefix}: matched ${matched} winner market${matched === 1 ? "" : "s"} ` +
+        `from ${sportMarkets.length} scanned, across ${games.length} games.`,
+    );
   }
 
   return { estimates, notes };
 }
 
 function matchMarket(market: MarketView, events: OddsEvent[]): ProbabilityEstimate | null {
-  const haystack = normalizeText(`${market.eventTitle} ${market.title} ${market.yesLabel}`);
+  // Only straight winner markets. Spreads, totals and props share the matchup
+  // title but ask a different question, and pricing them off a moneyline would
+  // be confidently wrong rather than merely unmatched.
+  const sides = splitMatchup(market.eventTitle) ?? splitMatchup(market.title);
+  if (!sides) return null;
+  const [teamA, teamB] = sides;
 
-  const game = events.find((event) => {
-    const home = nickname(event.home_team);
-    const away = nickname(event.away_team);
-    return (
-      home.length > 2 &&
-      away.length > 2 &&
-      haystack.includes(home) &&
-      haystack.includes(away)
-    );
-  });
-  if (!game) return null;
+  const candidates = events.filter(
+    (event) =>
+      (teamsMatch(teamA, event.away_team) && teamsMatch(teamB, event.home_team)) ||
+      (teamsMatch(teamA, event.home_team) && teamsMatch(teamB, event.away_team)),
+  );
 
-  // Which team does buying YES back? Only the YES label decides this — using
-  // the whole title would match both teams and pick the wrong side.
-  const yesText = normalizeText(market.yesLabel);
-  const homeNick = nickname(game.home_team);
-  const awayNick = nickname(game.away_team);
-  const backsHome = yesText.includes(homeNick);
-  const backsAway = yesText.includes(awayNick);
+  // Exactly one game, or none. Short Kalshi forms like "A's" are unambiguous
+  // beside their opponent but not in isolation, and taking the first of several
+  // candidates is how you end up confidently pricing the wrong game.
+  if (candidates.length !== 1) return null;
+  const game = candidates[0]!;
+
+  // Which team does buying YES back? The YES label names it directly.
+  const backsHome = teamsMatch(market.yesLabel, game.home_team);
+  const backsAway = teamsMatch(market.yesLabel, game.away_team);
   if (backsHome === backsAway) return null; // ambiguous or neither — refuse to guess
 
   const targetTeam = backsHome ? game.home_team : game.away_team;

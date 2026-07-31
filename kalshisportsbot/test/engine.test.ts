@@ -17,7 +17,7 @@ import {
 } from "../src/core/market.js";
 import { slateWindow } from "../src/core/time.js";
 import { fuse } from "../src/engine/fuse.js";
-import { devig } from "../src/signals/consensus.js";
+import { devig, splitMatchup, teamsMatch } from "../src/signals/consensus.js";
 import { findArbitrage, normalizeExclusiveSet } from "../src/signals/structural.js";
 import type { ProbabilityEstimate } from "../src/signals/types.js";
 
@@ -149,6 +149,64 @@ test("de-vigging strips the overround to a proper distribution", () => {
   const lopsided = devig([1.25, 4.5]);
   assert.ok(Math.abs(lopsided.reduce((a, b) => a + b, 0) - 1) < 1e-9);
   assert.ok(lopsided[0]! > lopsided[1]!);
+});
+
+// --- Team matching -----------------------------------------------------------
+
+test("REGRESSION: Kalshi city names match full sportsbook team names", () => {
+  // Kalshi sends the city, the books send the full name. Matching on the last
+  // word looks for "marlins", which Kalshi never sends — that silently produced
+  // zero matches across every league.
+  assert.equal(teamsMatch("Miami", "Miami Marlins"), true);
+  assert.equal(teamsMatch("Pittsburgh", "Pittsburgh Pirates"), true);
+  assert.equal(teamsMatch("Washington", "Washington Nationals"), true);
+  assert.equal(teamsMatch("Miami", "Pittsburgh Pirates"), false);
+});
+
+test("single-letter suffixes disambiguate same-city teams", () => {
+  // Kalshi writes "New York M" and "New York Y" for the Mets and Yankees.
+  assert.equal(teamsMatch("New York M", "New York Mets"), true);
+  assert.equal(teamsMatch("New York M", "New York Yankees"), false);
+  assert.equal(teamsMatch("New York Y", "New York Yankees"), true);
+  assert.equal(teamsMatch("New York Y", "New York Mets"), false);
+});
+
+test("REGRESSION: a stray initial cannot re-use the city token", () => {
+  // "Chicago C" is the Cubs. Without requiring distinct token assignments the
+  // "c" matches "Chicago" again and the White Sox pass — a confident bet on
+  // the wrong team, which is far worse than no match at all.
+  assert.equal(teamsMatch("Chicago C", "Chicago Cubs"), true);
+  assert.equal(teamsMatch("Chicago C", "Chicago White Sox"), false);
+  assert.equal(teamsMatch("Los Angeles D", "Los Angeles Dodgers"), true);
+  assert.equal(teamsMatch("Los Angeles D", "Los Angeles Angels"), false);
+});
+
+test("punctuation and one-word teams still match", () => {
+  assert.equal(teamsMatch("St. Louis", "St. Louis Cardinals"), true);
+  assert.equal(teamsMatch("Athletics", "Oakland Athletics"), true);
+});
+
+test("possessive and initialism forms Kalshi actually sends", () => {
+  // Live Kalshi titles include "Boston vs A's" and "Chicago WS vs Tampa Bay".
+  assert.equal(teamsMatch("A's", "Oakland Athletics"), true);
+  assert.equal(teamsMatch("A's", "Detroit Tigers"), false);
+  assert.equal(teamsMatch("Chicago WS", "Chicago White Sox"), true);
+  assert.equal(teamsMatch("Chicago WS", "Chicago Cubs"), false);
+  // The initialism must not cannibalise a token another word already claimed.
+  assert.equal(teamsMatch("Chicago C", "Chicago White Sox"), false);
+});
+
+test("matchup titles split into two sides", () => {
+  assert.deepEqual(splitMatchup("Miami vs New York M"), ["Miami", "New York M"]);
+  assert.deepEqual(splitMatchup("Miami vs New York M Winner?"), ["Miami", "New York M"]);
+  // Kalshi prefixes special fixtures; the prefix is not part of the team name.
+  assert.deepEqual(splitMatchup("Hall of Fame Game: Carolina vs Arizona"), [
+    "Carolina",
+    "Arizona",
+  ]);
+  // Not a head-to-head title — spreads and totals must not be priced off a moneyline.
+  assert.equal(splitMatchup("Total runs in Marlins game"), null);
+  assert.equal(splitMatchup("FC Sion vs Bate Borisov: Regulation Time Correct Score")?.[1], "Bate Borisov: Regulation Time Correct Score");
 });
 
 // --- Structural --------------------------------------------------------------
