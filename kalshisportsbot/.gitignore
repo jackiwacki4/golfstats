@@ -1,6 +1,17 @@
 node_modules/
 dist/
-.env
 *.log
 .cache/
 data/
+
+# Secrets. `.env` alone is not enough: editors and shell redirects readily
+# produce `.env.bak`, `.env.save`, `.env.local` and friends, and every one of
+# those holds the same live API key. Ignore the whole family, then let the
+# committed template back in.
+.env
+.env.*
+!.env.example
+
+# RSA private keys, if you ever keep one alongside the project rather than
+# outside it (outside is better).
+*.pem
