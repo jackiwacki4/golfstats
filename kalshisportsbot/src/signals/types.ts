@@ -22,6 +22,7 @@ export type SignalSource =
   | "market"
   | "structural"
   | "consensus"
+  | "coherence"
   | "microstructure"
   | "model";
 
@@ -37,11 +38,16 @@ export type SignalSource =
  *    which leg is wrong.
  *  - `model` earns less by default because a home-grown model is the easiest
  *    thing here to fool yourself with. Raise it once yours has a track record.
+ *  - `coherence` prices a market off the other markets on the same game. It
+ *    inherits the consensus anchor's accuracy and adds its own model error, so
+ *    it sits below consensus — but it reaches the ~33 markets per game that
+ *    consensus cannot see at all.
  *  - `market` is the prior: the crowd's price. It anchors the blend so that a
  *    market with no independent signal produces no edge, rather than noise.
  */
 export const SOURCE_WEIGHTS: Record<SignalSource, number> = {
   consensus: 1.0,
+  coherence: 0.7,
   structural: 0.65,
   model: 0.45,
   market: 0.8,

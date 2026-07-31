@@ -17,6 +17,7 @@ import { record } from "../core/journal.js";
 import { feeFor, planExecution, type ExecutionPlan } from "../core/execution.js";
 import { describeWager, type WagerDescription } from "../core/wager.js";
 import { buildConsensus } from "../signals/consensus.js";
+import { buildCoherence } from "../signals/coherence.js";
 import { readMicrostructure, stalePriceEstimate } from "../signals/microstructure.js";
 import { runModels } from "../signals/models.js";
 import { findArbitrage, normalizeExclusiveSet, type ArbOpportunity } from "../signals/structural.js";
@@ -413,6 +414,22 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
   const { estimates: consensus, notes: consensusNotes } = await buildConsensus(allMarkets);
   notes.push(...consensusNotes);
 
+  // --- Cross-market coherence, anchored on those consensus moneylines -------
+  const coherence = buildCoherence(allMarkets, consensus);
+  if (coherence.gamesModelled > 0) {
+    notes.push(
+      `Modelled ${coherence.gamesModelled} game${coherence.gamesModelled === 1 ? "" : "s"} ` +
+        `from their own moneyline and total, pricing ${coherence.marketsPriced} spread, ` +
+        "total and team-total markets the books can't be matched against.",
+    );
+  }
+  if (coherence.gamesInProgress > 0) {
+    notes.push(
+      `${coherence.gamesInProgress} game${coherence.gamesInProgress === 1 ? "" : "s"} ` +
+        "already under way — the same-game model only applies before first pitch.",
+    );
+  }
+
   // --- Fuse and rank --------------------------------------------------------
   const bets: BetRecommendation[] = [];
   let marketsWithSignal = 0;
@@ -427,6 +444,9 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
 
     const consensusEstimate = consensus.get(market.ticker);
     if (consensusEstimate) estimates.push(consensusEstimate);
+
+    const coherenceEstimate = coherence.estimates.get(market.ticker);
+    if (coherenceEstimate) estimates.push(coherenceEstimate);
 
     estimates.push(...runModels(market));
 

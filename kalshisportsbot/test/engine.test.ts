@@ -22,6 +22,8 @@ import { devig, devigPower, splitMatchup, teamsMatch } from "../src/signals/cons
 import { shrinkTowardMarket } from "../src/core/inference.js";
 import { planExecution } from "../src/core/execution.js";
 import { describeWager } from "../src/core/wager.js";
+import { fitGame, SPORT_MODELS } from "../src/core/scoring.js";
+import { buildCoherence, inferExpectedTotal } from "../src/signals/coherence.js";
 import { findArbitrage, normalizeExclusiveSet } from "../src/signals/structural.js";
 import type { ProbabilityEstimate } from "../src/signals/types.js";
 
@@ -447,6 +449,200 @@ test("an unrecognised label still negates readably", () => {
   const w = wagerOf("Something entirely novel happens", "no");
   assert.equal(w.typeLabel, "Market");
   assert.match(w.youWinIf, /does not happen/);
+});
+
+// --- Scoring model -----------------------------------------------------------
+
+test("a fitted game reproduces both of its anchors", () => {
+  // The whole method rests on this: fit to a win probability and an expected
+  // total, and the distribution must actually return them.
+  for (const [pWin, total, model] of [
+    [0.58, 8.5, SPORT_MODELS.MLB!],
+    [0.42, 9.5, SPORT_MODELS.MLB!],
+    [0.65, 162, SPORT_MODELS.WNBA!],
+  ] as const) {
+    const d = fitGame(pWin, total, model)!;
+    assert.ok(d, "should fit");
+    assert.ok(Math.abs(d.pWin() - pWin) < 0.01, `win prob off: ${d.pWin()} vs ${pWin}`);
+    // The total anchor is the median, so the over/under at it sits near 50%.
+    assert.ok(
+      Math.abs(d.pTotalOver(total) - 0.5) < 0.12,
+      `total anchor off: ${d.pTotalOver(total)}`,
+    );
+  }
+});
+
+test("derived prices obey the orderings they must", () => {
+  const d = fitGame(0.6, 8.5, SPORT_MODELS.MLB!)!;
+  // Winning by more is always less likely than winning by less.
+  assert.ok(d.pWinBy(true, 1.5) < d.pWinBy(true, 0.5));
+  assert.ok(d.pWinBy(true, 3.5) < d.pWinBy(true, 1.5));
+  // Higher totals are less likely to be exceeded.
+  assert.ok(d.pTotalOver(10.5) < d.pTotalOver(7.5));
+  // The favourite covers a given line more often than the underdog.
+  assert.ok(d.pWinBy(true, 1.5) > d.pWinBy(false, 1.5));
+  // Every probability stays a probability.
+  for (const p of [d.pWin(), d.pWinBy(true, 2.5), d.pTotalOver(9.5), d.pTeamOver(true, 4.5)]) {
+    assert.ok(p >= 0 && p <= 1, `not a probability: ${p}`);
+  }
+});
+
+test("the two teams' totals are consistent with the game total", () => {
+  const d = fitGame(0.55, 9, SPORT_MODELS.MLB!)!;
+  // Each side should score around half the total, the favourite slightly more.
+  assert.ok(d.pTeamOver(true, 4.5) > d.pTeamOver(false, 4.5));
+  assert.ok(d.pTeamOver(true, 0.5) > 0.9, "almost always scores at least one");
+  assert.ok(d.pTeamOver(true, 20.5) < 0.01, "twenty runs is rare");
+});
+
+test("a pick'em game is symmetric", () => {
+  const d = fitGame(0.5, 9, SPORT_MODELS.MLB!)!;
+  assert.ok(Math.abs(d.pWinBy(true, 1.5) - d.pWinBy(false, 1.5)) < 0.01);
+  assert.ok(Math.abs(d.pTeamOver(true, 4.5) - d.pTeamOver(false, 4.5)) < 0.01);
+});
+
+test("the expected total is read off the ladder by interpolation", () => {
+  // A ladder priced 0.70 / 0.55 / 0.40 across 7.5 / 8.5 / 9.5 crosses 50%
+  // between 8.5 and 9.5, nearer 8.5.
+  const ladder = [
+    market({ ticker: "t1", yesLabel: "Over 7.5 runs scored", yesBid: 0.69, yesAsk: 0.71 }),
+    market({ ticker: "t2", yesLabel: "Over 8.5 runs scored", yesBid: 0.54, yesAsk: 0.56 }),
+    market({ ticker: "t3", yesLabel: "Over 9.5 runs scored", yesBid: 0.39, yesAsk: 0.41 }),
+  ];
+  const total = inferExpectedTotal(ladder)!;
+  assert.ok(total > 8.5 && total < 9.5, `expected ~8.8, got ${total}`);
+});
+
+test("no total ladder means no derived prices — it refuses to guess", () => {
+  assert.equal(inferExpectedTotal([]), null);
+  assert.equal(inferExpectedTotal([market({ yesLabel: "Over 7.5 runs scored" })]), null);
+});
+
+test("coherence prices a game's other markets off its moneyline", () => {
+  const game = "26JUL302140BOSATH";
+  const mk = (series: string, label: string, ticker: string, mid = 0.5) =>
+    market({
+      ticker,
+      seriesTicker: series,
+      eventTicker: `${series}-${game}`,
+      eventTitle: "Boston vs A's",
+      yesLabel: label,
+      yesBid: mid - 0.01,
+      yesAsk: mid + 0.01,
+    });
+
+  const moneyline = mk("KXMLBGAME", "Boston", "ML-BOS", 0.5);
+  const markets = [
+    moneyline,
+    mk("KXMLBTOTAL", "Over 7.5 runs scored", "T-7.5", 0.7),
+    mk("KXMLBTOTAL", "Over 8.5 runs scored", "T-8.5", 0.55),
+    mk("KXMLBTOTAL", "Over 9.5 runs scored", "T-9.5", 0.4),
+    mk("KXMLBSPREAD", "Boston wins by over 1.5 runs", "S-1.5", 0.35),
+    mk("KXMLBTEAMTOTAL", "Boston over 3.5 runs scored", "TT-3.5", 0.5),
+  ];
+
+  // Sharp books say Boston are 60% — the anchor consensus provides.
+  const anchors = new Map<string, ProbabilityEstimate>([
+    ["ML-BOS", { source: "consensus", probability: 0.6, confidence: 0.9, rationale: "books" }],
+  ]);
+
+  const result = buildCoherence(markets, anchors);
+  assert.equal(result.gamesModelled, 1);
+  assert.ok(result.marketsPriced >= 4, `priced only ${result.marketsPriced}`);
+
+  // The anchor itself must NOT be re-derived — that would double-count it.
+  assert.equal(result.estimates.has("ML-BOS"), false);
+
+  // A favourite winning by 2+ should land well under their win probability.
+  const spread = result.estimates.get("S-1.5")!;
+  assert.ok(spread, "run line should be priced");
+  assert.ok(spread.probability < 0.6 && spread.probability > 0.2, `got ${spread.probability}`);
+  assert.equal(spread.source, "coherence");
+});
+
+test("REGRESSION: a game already under way is not modelled", () => {
+  // A live A's/Boston ladder read 99% / 99% / 99% / 45% across consecutive
+  // strikes — not a scoring distribution, but a team that had already scored
+  // four. Anchoring to it made the model disagree with liquid, heavily-traded
+  // markets by up to 35 points.
+  const game = "26JUL302140BOSATH";
+  const mk = (series: string, label: string, ticker: string, mid: number) =>
+    market({
+      ticker,
+      seriesTicker: series,
+      eventTicker: `${series}-${game}`,
+      eventTitle: "Boston vs A's",
+      yesLabel: label,
+      yesBid: Math.max(0.01, mid - 0.01),
+      yesAsk: Math.min(0.99, mid + 0.01),
+    });
+
+  const live = [
+    mk("KXMLBGAME", "Boston", "ML-BOS", 0.34),
+    mk("KXMLBTOTAL", "Over 7.5 runs scored", "T-7.5", 0.67),
+    mk("KXMLBTOTAL", "Over 9.5 runs scored", "T-9.5", 0.37),
+    // Runs already banked: certainty at the bottom of the ladder.
+    mk("KXMLBTEAMTOTAL", "A's over 1.5 runs scored", "TT-1.5", 0.99),
+    mk("KXMLBTEAMTOTAL", "A's over 3.5 runs scored", "TT-3.5", 0.99),
+    mk("KXMLBTEAMTOTAL", "A's over 4.5 runs scored", "TT-4.5", 0.45),
+  ];
+  const anchors = new Map<string, ProbabilityEstimate>([
+    ["ML-BOS", { source: "consensus", probability: 0.34, confidence: 0.9, rationale: "books" }],
+  ]);
+
+  const result = buildCoherence(live, anchors);
+  assert.equal(result.gamesInProgress, 1);
+  assert.equal(result.gamesModelled, 0);
+  assert.equal(result.estimates.size, 0, "must price nothing on a live game");
+});
+
+test("a normal pre-game ladder is not mistaken for a live one", () => {
+  const game = "26AUG012140DETATH";
+  const mk = (series: string, label: string, ticker: string, mid: number) =>
+    market({
+      ticker,
+      seriesTicker: series,
+      eventTicker: `${series}-${game}`,
+      eventTitle: "Detroit vs Athletics",
+      yesLabel: label,
+      yesBid: mid - 0.01,
+      yesAsk: mid + 0.01,
+    });
+
+  // Pre-game, "over 1.5 runs" for a team sits near 88% — high, but not certain.
+  const pregame = [
+    mk("KXMLBGAME", "Detroit", "ML-DET", 0.52),
+    mk("KXMLBTOTAL", "Over 7.5 runs scored", "T-7.5", 0.62),
+    mk("KXMLBTOTAL", "Over 9.5 runs scored", "T-9.5", 0.38),
+    mk("KXMLBTEAMTOTAL", "Detroit over 1.5 runs scored", "TT-1.5", 0.88),
+    mk("KXMLBTEAMTOTAL", "Detroit over 3.5 runs scored", "TT-3.5", 0.55),
+  ];
+  const anchors = new Map<string, ProbabilityEstimate>([
+    ["ML-DET", { source: "consensus", probability: 0.52, confidence: 0.9, rationale: "books" }],
+  ]);
+
+  const result = buildCoherence(pregame, anchors);
+  assert.equal(result.gamesInProgress, 0);
+  assert.equal(result.gamesModelled, 1);
+  assert.ok(result.marketsPriced > 0);
+});
+
+test("coherence stays silent without a sharp anchor", () => {
+  // No consensus moneyline means no trustworthy input, so nothing is derived
+  // rather than something being invented from Kalshi's own prices.
+  const markets = [
+    market({ ticker: "T1", seriesTicker: "KXMLBTOTAL", eventTicker: "KXMLBTOTAL-26JUL30X", yesLabel: "Over 7.5 runs scored" }),
+    market({ ticker: "T2", seriesTicker: "KXMLBTOTAL", eventTicker: "KXMLBTOTAL-26JUL30X", yesLabel: "Over 8.5 runs scored" }),
+  ];
+  const result = buildCoherence(markets, new Map());
+  assert.equal(result.gamesModelled, 0);
+  assert.equal(result.estimates.size, 0);
+});
+
+test("confidence decays into the tails", () => {
+  // The anchors pin the middle; the far strikes are the model's shape talking.
+  const d = fitGame(0.55, 9, SPORT_MODELS.MLB!)!;
+  assert.ok(d.pWinBy(true, 6.5) < 0.15, "a 7-run win should be a longshot");
 });
 
 // --- Shrinkage ---------------------------------------------------------------

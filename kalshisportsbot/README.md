@@ -45,7 +45,7 @@ npm run scan -- --horizon 24h            # today | 24h | all
 npm run scan -- --no-futures             # day-of only, no exceptions
 npm run scan -- --screaming-edge 15      # raise the bar futures must clear
 npm run review                           # closing line value, by signal
-npm test                                 # 51 tests over the math
+npm test                                 # 62 tests over the math
 ```
 
 ## Today's slate, and the one timestamp that matters
@@ -85,6 +85,7 @@ each can be trusted to be *independently right*:
 | **Cross-book consensus** | 1.00 | De-vigs sportsbook odds (power method) and blends them **weighted by how sharp each book is** — Pinnacle and Circa carry ~3x a retail book, because retail books largely copy them and shade for public bias, so treating them as independent opinions double-counts one line. |
 | **Market price** | 0.80 | The crowd, as a prior. Anchors the blend so no signal means no edge. |
 | **Structural** | 0.65 | Renormalizes mutually exclusive events to sum to 100%, stripping the overround. Pure arithmetic. |
+| **Same-game coherence** | 0.70 | Prices a game's spreads, totals and team totals off its *own* moneyline — see below. Reaches ~33 markets per game that the book matcher cannot. |
 | **Own models** | 0.45 | Your models. Ships with a favourite-longshot-bias correction. |
 | **Microstructure** | quality | Not a probability — it decides whether an edge is *takeable*, scaling size and rank by spread, depth, volume, and staleness. It also flags stale quotes the tape has moved past. |
 
@@ -116,6 +117,44 @@ arithmetic can establish it. So the dashboard splits structural edges in two:
 - **Conditional** — a YES-side dutch book. Shown with the break-even "none of
   the above" probability, so the judgement becomes one you can actually make:
   *is an unlisted outcome more likely than 1.5%?*
+
+## Pricing a game's markets off each other
+
+The book matcher only handles moneylines — correctly, since a spread asks a
+different question. But Kalshi lists about **35 markets on a single baseball
+game**: the moneyline, eight run lines, eleven totals, fourteen team totals. Two
+of them got a signal. The other thirty-three got nothing, not because they were
+efficiently priced but because nothing was looking at them.
+
+They aren't thirty-five separate questions. They're thirty-five questions about
+one scoring distribution. Pin that down from two anchors — the sharp books' win
+probability, and the market's own expected total, read off the total ladder where
+it crosses 50% — and every remaining strike has an implied fair price. Two
+anchors, two parameters: exactly determined, with no free parameters to fool
+yourself with.
+
+Serious money concentrates on moneylines and headline totals. The deep strikes
+on a run-line ladder are quoted and largely left alone. Propagating a sharp
+number into markets nobody is watching is a far more winnable game than trying
+to out-handicap a closing line.
+
+**Baseball uses a normal model, not Poisson**, and the reason matters. A Poisson
+pair ties the spread of outcomes to the mean: at an 8.8-run total it implies a
+margin SD of 3.0 and a team-total SD of 2.1, where the real figures are about
+4.2 and 3.1. Runs cluster — a six-run inning is one event, not six independent
+ones. Hockey and soccer stay Poisson, where scores are low enough that
+discreteness matters more and the fit is close.
+
+**Games already under way are skipped.** This was the single biggest trap. A
+live ladder reading 99% / 99% / 99% / 45% across consecutive strikes is not a
+probability distribution — it's a team that has already scored four runs.
+Anchoring to it made the model disagree with liquid, heavily-traded markets by up
+to 35 points. Detection is by ladder *shape* rather than a clock: certainty at a
+low strike simply is the signature of runs already banked, and it needs no start
+time, timezone or rain-delay handling. On a live board this correctly skips
+in-progress games and prices ~350 markets across the rest, with a **median
+disagreement of 2.4 points** — close agreement most of the time, occasional
+disagreement, which is what a real signal looks like.
 
 ## How it avoids fooling itself
 
@@ -318,13 +357,16 @@ src/
   core/money.ts          fees, EV, Kelly, sizing        <- the math that matters
   core/market.ts         normalization, resolution time, parlay detection
   core/time.ts           slate windows in a real timezone
+  core/terms.ts          structured contract terms, parsed once
   core/wager.ts          says in English what bet is being suggested
+  core/scoring.ts        score distributions (normal / Poisson) per sport
   core/inference.ts      shrinks disagreements toward the market
   core/execution.ts      take the offer, or post a limit order
   core/journal.ts        records every prediction for later scoring
   core/cache.ts          disk cache with TTL
   signals/structural.ts  arbitrage + overround stripping
   signals/consensus.ts   sportsbook de-vig + matching
+  signals/coherence.ts   prices a game's markets off its own moneyline
   signals/microstructure.ts  spread/depth/staleness
   signals/models.ts      your models
   engine/fuse.ts         log-odds blending
@@ -332,7 +374,7 @@ src/
   engine/present.ts      view model the website renders
   server.ts / cli.ts     site + terminal
 web/index.html           the website
-test/engine.test.ts      51 tests
+test/engine.test.ts      62 tests
 ```
 
 ## Limitations worth knowing
@@ -359,12 +401,14 @@ test/engine.test.ts      51 tests
 - **The weights are still guesses** — but now measurable. Run `npm run review`
   once you have ~30 bets per signal and set them from CLV instead of from my
   judgement.
-- **The biggest unbuilt idea: cross-market coherence.** Kalshi lists the game
-  winner, first-5-innings, run line, totals and team totals on the *same game*.
-  Those are mathematically linked through one scoring distribution, so an
-  inconsistency between them is a mispricing that needs no external data at all
-  — and almost nobody arbitrages it, because it requires modelling the joint
-  distribution rather than reading a price. That's where I'd go next.
+- **The coherence model's sigmas are published values, not fitted here.** They
+  set how confidently a deep strike can be priced; wrong sigma shows up as
+  systematically mispriced tails. `npm run review` is what would reveal it.
+- **Coherence needs a consensus anchor**, so it only fires on games the book
+  matcher reached. No `ODDS_API_KEY` means no anchor and no derived prices.
+- **Player props and partial-game markets are still unpriced.** They need their
+  own models — a pitcher's strikeout distribution isn't derivable from the game
+  total. That's the next real gap.
 
 ## Advisory only
 

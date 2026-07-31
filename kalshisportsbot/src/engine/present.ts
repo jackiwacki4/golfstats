@@ -190,6 +190,7 @@ function confidenceOf(value: number): PresentedPick["confidence"] {
 /** Turn an internal signal name into something a reader recognises. */
 const DRIVER_LABELS: Record<string, string> = {
   consensus: "Sportsbook consensus",
+  coherence: "Same-game model",
   structural: "Priced-set correction",
   model: "Model",
   microstructure: "Stale quote",
