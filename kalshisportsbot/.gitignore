@@ -15,3 +15,4 @@ data/
 # RSA private keys, if you ever keep one alongside the project rather than
 # outside it (outside is better).
 *.pem
+report.html

@@ -40,6 +40,7 @@ Bound to `127.0.0.1`, so it's reachable only from your machine and needs no
 password. `npm run scan` prints the same results in the terminal.
 
 ```sh
+npm run report                           # board-level performance review (HTML)
 npm run scan -- --min-edge 2 --categories Sports --limit 10
 npm run scan -- --horizon 24h            # today | 24h | all
 npm run scan -- --no-futures             # day-of only, no exceptions
@@ -372,6 +373,7 @@ src/
   engine/fuse.ts         log-odds blending
   engine/scan.ts         orchestration + ranking
   engine/present.ts      view model the website renders
+  report/                board-level HTML performance review
   server.ts / cli.ts     site + terminal
 web/index.html           the website
 test/engine.test.ts      62 tests
